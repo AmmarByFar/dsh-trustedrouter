@@ -2,7 +2,7 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-10-07):** Phases 0 and 1 done. The host half (`index.js`) is built and passes 27 unit tests and the headless e2e suite on dsh 0.2.0-rc.2 and 0.2.1-alpha.1 (see [Phase 1 results](#phase-1-results-2026-10-07)). **Next step is Phase 2 (client half).** Decisions 2–4 still need the user's confirmation before Phase 2's UI work. The repo is private on GitHub.
+**Status (2026-10-07):** Phases 0 and 1 done. The host half (`index.js`) is built and passes 27 unit tests and the headless e2e suite on dsh 0.2.0-rc.2 and 0.2.1-alpha.1 (see [Phase 1 results](#phase-1-results-2026-10-07)). **Next step is Phase 2 (client half).** All decisions are confirmed. The repo is private on GitHub.
 
 ## Background: why a plugin
 
@@ -21,9 +21,9 @@ A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
 | # | Decision | Status |
 |---|---|---|
 | 1 | Repo `AmmarByFar/dsh-trustedrouter`, MIT licence, `dsh-plugin` GitHub topic | **Confirmed** (repo name and owner) |
-| 2 | Models page offers: privacy floor, provider allow/block (`only`/`ignore`), `sort`, US-only (`jurisdiction`), billing (`usage`). Advanced fields (`max_price`, `order`, `allow_fallbacks`, raw JSON) go on the plugin's own Plugins page | Proposed; confirm with user |
-| 3 | GitHub first; npm publish later | Proposed; confirm with user |
-| 4 | Per-chat (composer) privacy override is **not** in v1 | Proposed; confirm with user |
+| 2 | Models page offers: privacy floor, provider allow/block (`only`/`ignore`), `sort`, US-only (`jurisdiction`), billing (`usage`). Advanced fields (`max_price`, `order`, `allow_fallbacks`, raw JSON) go on the plugin's own Plugins page | **Confirmed** 2026-10-07 |
+| 3 | GitHub first; npm publish later | **Confirmed** 2026-10-07 |
+| 4 | Per-chat (composer) privacy override is **not** in v1 | **Confirmed** 2026-10-07. Wanted for v2 or later; see [Later (v2+)](#later-v2) |
 | 5 | Public vs private repo during development | **Confirmed: private** until Phase 4. Created 2026-10-07. Git installs work on the maintainer's machine through gh's credential helper |
 
 "Official" is not achievable. dsh's CONTRIBUTING.md says the team is not accepting outside PRs, and the Plugins page's "Official" group is a hard-coded list of plugins shipped with dsh. The sanctioned route is a public repo with the `dsh-plugin` topic, which community registries pick up automatically.
@@ -273,6 +273,13 @@ Results:
 
 - Install the release into the real `web` profile and move settings into the new `trustedrouter` row.
 - Remove the prototype's `extra-body` insert row and `~/dsh-extra-body` only after verifying (see `CLAUDE.local.md`).
+
+### Later (v2+)
+
+- **Per-chat privacy override** (Decision 4): a composer control that raises or changes the policy for one chat.
+  - Needs session attribution inside the fetch wrapper, which is unverified (see Risks).
+  - Candidates are `ctx.on('llm/stream')` (read-only, frozen options) and `ctx.agents.currentInitiator()` (AsyncLocalStorage). Check whether either propagates into pi-ai's `fetch` call.
+- **npm publish** (Decision 3).
 
 ### Install flow for users (target)
 
