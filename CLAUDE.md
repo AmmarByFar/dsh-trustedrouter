@@ -2,7 +2,7 @@
 
 A community DeepSeek Harness (dsh) plugin that adds TrustedRouter `provider` routing and privacy settings (e.g. `min_privacy`) to LLM request bodies, editable per model from the dsh web UI. Repo: `AmmarByFar/dsh-trustedrouter`.
 
-**Where we are:** Phases 0 (spikes), 1 (host half, `index.js`), 2 (client half, `client.js`) and 3 (README, CI, clean-install checks) are done; the results are in PLAN.md. **Pick up at Phase 4 (publish) in PLAN.md**, starting with a push (ask first) and CI's first run. Update PLAN.md's Status line and design notes as phases complete, so the next session can resume from it.
+**Where we are:** Phases 0 (spikes), 1 (host half, `index.js`), 2 (client half, `client.js`) and 3 (README, CI, clean-install checks) are done; the results are in PLAN.md. **Pick up at Phase 4 (publish) in PLAN.md.** CI passes on GitHub. Update PLAN.md's Status line and design notes as phases complete, so the next session can resume from it.
 
 If `CLAUDE.local.md` exists, read it at session start. It holds maintainer-machine notes: the live dsh setup, the working prototype's location, and accounts.
 

@@ -2,7 +2,7 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-10-07):** Phases 0 to 3 done, except CI's first run on GitHub, which needs a push. The host half (`index.js`) and the client half (`client.js`) are built. 89 unit tests pass (27 host, 62 client), the headless e2e suite passes, a clean install from GitHub works, and the UI was checked in a browser, all on dsh 0.2.0-rc.2 and 0.2.1-alpha.1. README, LICENSE, CHANGELOG and the CI workflow are written (see [Phase 3 results](#phase-3-results-2026-10-07)). **Next: push (ask first) and watch the first CI run, then Phase 4 (publish).** All decisions are confirmed. The repo is private on GitHub.
+**Status (2026-10-07):** Phases 0 to 3 done. The host half (`index.js`) and the client half (`client.js`) are built. 89 unit tests pass (27 host, 62 client), the headless e2e suite passes, a clean install from GitHub works, and the UI was checked in a browser, all on dsh 0.2.0-rc.2 and 0.2.1-alpha.1. README, LICENSE, CHANGELOG and the CI workflow are written, and CI's first run passed on GitHub (see [Phase 3 results](#phase-3-results-2026-10-07)). **Next step is Phase 4 (publish).** All decisions are confirmed. The repo is private on GitHub.
 
 ## Background: why a plugin
 
@@ -328,7 +328,7 @@ Results:
 - **Tier mapping confirmed** with keyed requests after the UI work (§5).
 - **Still open:** screenshots of the final copy. The Chrome window was hidden for the last checks, so those were made through DOM reads, not screenshots. Done in Phase 3.
 
-### Phase 3: packaging and verification. DONE 2026-10-07 (CI's first run pending a push); see results below.
+### Phase 3: packaging and verification. DONE 2026-10-07; see results below.
 
 - README: install via UI and CLI, the pnpm/corepack note, verification steps, and the tested dsh versions. Also LICENSE (MIT) and CHANGELOG.
 - GitHub Actions:
@@ -345,7 +345,7 @@ Results:
   - The README covers requirements, install by UI and CLI, both settings pages, the config row, checking it works, limitations, tested versions and development.
   - Screenshots are in `docs/`: `models-section.png`, `model-editor.png` and `plugins-page.png`. They are dark theme, from rc.2 running the git-installed copy. `docs/` is not in `files`, so it doesn't ship.
   - `npm pack` ships 8 files, 26 kB: README and LICENSE (npm adds them), `index.js`, `client.js`, `cordis.patch.yml`, `icon.svg`, `locale/en.json` and `package.json`.
-- **CI:** `.github/workflows/test.yml`, lint-clean under actionlint 1.7.7. Not yet run on GitHub.
+- **CI:** `.github/workflows/test.yml`, lint-clean under actionlint 1.7.7. The first run, [37658437887](https://github.com/AmmarByFar/dsh-trustedrouter/actions/runs/37658437887) on push `0db42dc`, passed: unit 12 s; e2e 1 min 21 s on rc.2 and 1 min 47 s on alpha, with every PASS line present.
   - Job `unit`: `npm install && npm test` on Node 22.
   - Job `e2e`: `run-all.sh` plus `clean-install.sh`.
     - Pushes and PRs test 0.2.0-rc.2 and 0.2.1-alpha.1.
@@ -370,9 +370,7 @@ Results:
 
 ### Phase 4: publish
 
-Before starting:
-1. Push `main` (ask first) and check that CI's first run passes.
-2. Optionally trigger the workflow by hand (`workflow_dispatch`) to try the dist-tag matrix.
+Before starting, optionally trigger the workflow by hand (`gh workflow run test.yml`) to try the dist-tag matrix (`latest`, `alpha`).
 
 Steps:
 - Bump `package.json` to `0.1.0`, and date the CHANGELOG entry.
@@ -380,6 +378,7 @@ Steps:
 - Tag `v0.1.0` and create a GitHub release from the CHANGELOG entry.
 - Run `test/e2e/clean-install.sh github:AmmarByFar/dsh-trustedrouter#v0.1.0` on both versions. The README already uses that spec; it works only once the tag exists.
 - On a public repo, GitHub disables scheduled workflows after 60 days with no repo activity, after warning by email. Re-enable the weekly run if that happens.
+- GitHub annotates every job: `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19. Nothing to do unless a run breaks then.
 - Optionally npm later.
 - Optionally post a GitHub Discussion on dsh asking for a native `extraBody`/`onPayload` setting in llm-pi-ai, which would retire the fetch wrapper.
 
