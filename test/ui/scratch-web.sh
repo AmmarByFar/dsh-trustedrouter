@@ -13,6 +13,8 @@
 #
 # `link:` means client edits reach the page through the client-modules HMR; host edits need a restart.
 # Env: DSH_VERSION (default 0.2.0-rc.2), e.g. DSH_VERSION=alpha.
+#      PLUGIN_SPEC (default link:<repo>), e.g. github:AmmarByFar/dsh-trustedrouter#main to check the
+#      installed copy as a user gets it. It applies only to a fresh <dir>; an installed profile is kept.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -20,6 +22,7 @@ repo=$(cd "$here/../.." && pwd)
 cmd=${1:?usage: scratch-web.sh start|stop <dir>}
 dir=$(mkdir -p "${2:?usage: scratch-web.sh start|stop <dir>}" && cd "$2" && pwd)
 version=${DSH_VERSION:-0.2.0-rc.2}
+spec=${PLUGIN_SPEC:-link:$repo}
 
 stop_group() {
   local file=$1
@@ -47,7 +50,7 @@ export DSH_HOME="$dir/home" PATH="$dir/bin:$PATH"
 profile="$DSH_HOME/profiles/web"
 
 if ! grep -q '"dsh-trustedrouter"' "$profile/package.json" 2>/dev/null; then
-  npx --yes "@deepseek-ai/dsh@$version" plugin --profile web add "link:$repo"
+  npx --yes "@deepseek-ai/dsh@$version" plugin --profile web add "$spec"
 fi
 
 rm -f "$dir/mock-port"

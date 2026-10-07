@@ -1,0 +1,45 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly, against dsh's moving dist-tags: if a dsh release stops calling the global fetch, requests
+  # would go out without `provider` and nothing else would fail.
+  schedule:
+    - cron: '23 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npm test
+
+  e2e:
+    name: e2e (dsh ${{ matrix.dsh }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # Pushes and pull requests test the versions the README lists; scheduled and manual runs follow the dist-tags.
+        dsh: ${{ fromJSON((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && '["latest", "alpha"]' || '["0.2.0-rc.2", "0.2.1-alpha.1"]') }}
+    env:
+      DSH_VERSION: ${{ matrix.dsh }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm install
+      - run: test/e2e/run-all.sh
+      - run: test/e2e/clean-install.sh

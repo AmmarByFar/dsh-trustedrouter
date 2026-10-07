@@ -2,7 +2,7 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-10-07):** Phases 0, 1 and 2 done. The host half (`index.js`) and the client half (`client.js`) are built. 89 unit tests pass (27 host, 62 client), the headless e2e suite passes, and the UI was checked in a browser, all on dsh 0.2.0-rc.2 and 0.2.1-alpha.1 (see [Phase 2 results](#phase-2-results-2026-10-07)). The tier → `min_privacy` mapping the UI relies on is confirmed against TrustedRouter. **Next step is Phase 3 (packaging and verification).** All decisions are confirmed. The repo is private on GitHub.
+**Status (2026-10-07):** Phases 0 to 3 done, except CI's first run on GitHub, which needs a push. The host half (`index.js`) and the client half (`client.js`) are built. 89 unit tests pass (27 host, 62 client), the headless e2e suite passes, a clean install from GitHub works, and the UI was checked in a browser, all on dsh 0.2.0-rc.2 and 0.2.1-alpha.1. README, LICENSE, CHANGELOG and the CI workflow are written (see [Phase 3 results](#phase-3-results-2026-10-07)). **Next: push (ask first) and watch the first CI run, then Phase 4 (publish).** All decisions are confirmed. The repo is private on GitHub.
 
 ## Background: why a plugin
 
@@ -326,9 +326,9 @@ Results:
   - Draft card: render nothing (§1).
   - Locale on alpha: it works, and both signatures exist on both versions (§4).
 - **Tier mapping confirmed** with keyed requests after the UI work (§5).
-- **Still open:** screenshots of the final copy. The Chrome window was hidden for the last checks, so those were made through DOM reads, not screenshots. This is a Phase 3 item.
+- **Still open:** screenshots of the final copy. The Chrome window was hidden for the last checks, so those were made through DOM reads, not screenshots. Done in Phase 3.
 
-### Phase 3: packaging and verification. NEXT.
+### Phase 3: packaging and verification. DONE 2026-10-07 (CI's first run pending a push); see results below.
 
 - README: install via UI and CLI, the pnpm/corepack note, verification steps, and the tested dsh versions. Also LICENSE (MIT) and CHANGELOG.
 - GitHub Actions:
@@ -339,19 +339,47 @@ Results:
   - the client half loads from the installed copy.
 - Screenshot the final Models section and Plugins page for the README, with the Chrome window visible.
 
-**Starting the next session:**
-1. `npm install && npm test`. Expect 89 passing.
-2. `test/ui/scratch-web.sh start <scratchpad>/web` (optionally with `DSH_VERSION=alpha`) for a UI to screenshot.
-   - Settings → Models → trustedrouter card → Privacy & routing.
-   - Plugins → TrustedRouter privacy → Configure.
-   - Stop it with `test/ui/scratch-web.sh stop <same dir>`.
-3. Write the README from the [Install flow](#install-flow-for-users-target) and these screenshots, then the CI workflow, then the clean-install test.
-4. Pushing still needs a yes from the maintainer each time (CLAUDE.md).
+#### Phase 3 results (2026-10-07)
+
+- **README.md**, **LICENSE** (MIT, Ammar Mheir) and **CHANGELOG.md** (an "Unreleased (0.1.0)" entry) are written.
+  - The README covers requirements, install by UI and CLI, both settings pages, the config row, checking it works, limitations, tested versions and development.
+  - Screenshots are in `docs/`: `models-section.png`, `model-editor.png` and `plugins-page.png`. They are dark theme, from rc.2 running the git-installed copy. `docs/` is not in `files`, so it doesn't ship.
+  - `npm pack` ships 8 files, 26 kB: README and LICENSE (npm adds them), `index.js`, `client.js`, `cordis.patch.yml`, `icon.svg`, `locale/en.json` and `package.json`.
+- **CI:** `.github/workflows/test.yml`, lint-clean under actionlint 1.7.7. Not yet run on GitHub.
+  - Job `unit`: `npm install && npm test` on Node 22.
+  - Job `e2e`: `run-all.sh` plus `clean-install.sh`.
+    - Pushes and PRs test 0.2.0-rc.2 and 0.2.1-alpha.1.
+    - The weekly cron (Mondays 05:23 UTC) and manual runs test the `latest` and `alpha` dist-tags.
+- **`test/e2e/clean-install.sh [spec]`** (new) installs into a fresh `DSH_HOME` the way a user would. The default spec is an `npm pack` of the checkout, so CI needs no git credentials for the private repo. It checks:
+  1. the install asks for no build approval (`allowBuilds`);
+  2. the profile holds a real copy (not a symlink) with both halves;
+  3. a headless run through `run-headless.sh`, with the new `E2E_DSH_HOME`, against `test/e2e/installed.yml`, which configures the bundle's own row;
+  4. `dsh web` lists `dsh-trustedrouter` in `__DSH_BOOT__`, and serves bytes identical to the installed `client.js` (plus a trailing sourceMappingURL).
+- **`test/ui/scratch-web.sh`** takes `PLUGIN_SPEC` (default `link:<repo>`), so the UI can run from a git install.
+- **Clean install results**, all with no build prompt and only the expected schemastery peer warning:
+  - `clean-install.sh` passed on rc.2 with the packed tarball, and on alpha with `https://github.com/AmmarByFar/dsh-trustedrouter#main` (the form the UI takes).
+  - `github:AmmarByFar/dsh-trustedrouter#main` passed by hand on rc.2, headless and web.
+  - pnpm applies `files` to git installs: the installed copy has only the shipped files.
+- **Browser checks** of the git-installed copy:
+  - rc.2 and alpha: boot with no console messages, and the section renders on both gateway cards.
+  - **Uninstall keeps settings.** On rc.2, the plugin page's Uninstall removed the dependency and the bundle but left the profile patch, including the `trustedrouter` row, unchanged.
+  - **The UI install works.** Plugins → Add plugin with `https://github.com/AmmarByFar/dsh-trustedrouter#main`, then Install and Enable now. dsh records it as `github:AmmarByFar/dsh-trustedrouter#main`. The host reloaded the saved policy, and the Models section came back without a page reload.
+  - On both versions, **Add plugin** opens the spec field directly. Alpha's split button has other methods in its dropdown. The "Install a third-party plugin" chooser strings in the alpha source aren't on the default path.
+- **Screenshots work while the window is hidden.** `document.visibilityState` was `hidden`, yet `computer` screenshots and `zoom` with `save_to_disk` worked. `zoom` crops at the viewport's full resolution; the screenshot frame itself is downscaled.
+- **Unit and e2e** re-run after the script changes: 89 unit tests, and `run-all.sh` on both versions.
 
 ### Phase 4: publish
 
-- Public repo, `dsh-plugin` topic, tagged release (`v0.1.0`).
-- Install spec `github:AmmarByFar/dsh-trustedrouter#v0.1.0`.
+Before starting:
+1. Push `main` (ask first) and check that CI's first run passes.
+2. Optionally trigger the workflow by hand (`workflow_dispatch`) to try the dist-tag matrix.
+
+Steps:
+- Bump `package.json` to `0.1.0`, and date the CHANGELOG entry.
+- Make the repo public (ask first), and add the `dsh-plugin` topic.
+- Tag `v0.1.0` and create a GitHub release from the CHANGELOG entry.
+- Run `test/e2e/clean-install.sh github:AmmarByFar/dsh-trustedrouter#v0.1.0` on both versions. The README already uses that spec; it works only once the tag exists.
+- On a public repo, GitHub disables scheduled workflows after 60 days with no repo activity, after warning by email. Re-enable the weekly run if that happens.
 - Optionally npm later.
 - Optionally post a GitHub Discussion on dsh asking for a native `extraBody`/`onPayload` setting in llm-pi-ai, which would retire the fetch wrapper.
 
@@ -368,11 +396,11 @@ Results:
 - **npm publish** (Decision 3).
 - **"Add as gateway" hint.** A pi-ai card whose baseURL looks like TrustedRouter but isn't under a gateway currently shows nothing. It could offer to add its baseURL to `gateways`.
 
-### Install flow for users (target)
+### Install flow for users (as in the README)
 
 1. Run `corepack enable pnpm` once if `pnpm` isn't on PATH.
-2. dsh sidebar → **Plugins** → **Add plugin** → `https://github.com/AmmarByFar/dsh-trustedrouter`, or the CLI: `dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.0`.
-3. Enable it.
+2. dsh sidebar → **Plugins** → **Add plugin** → `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.0` → Install, or the CLI: `dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.0`.
+3. **Enable now**. (Verified in Phase 3 with `#main`.)
 4. Settings → Models → TrustedRouter card → **Privacy & routing**.
 
 ## Testing
@@ -383,9 +411,13 @@ Results:
 - **Host end-to-end:** `test/e2e/run-headless.sh <row.yml>`, i.e. `dsh --profile headless` in a scratch `DSH_HOME` against `test/e2e/mock-openai.mjs`. It asserts the recorded request bodies against the row's `# expect-provider:` line.
   - `test/e2e/run-all.sh` runs every row in `test/e2e/rows/` plus the control run without the plugin (which expects no `provider`).
   - `dsh headless` prints the plugin's stderr lines, which is useful for asserting logging.
-- **UI:** `test/ui/scratch-web.sh start <dir>` (env `DSH_VERSION`, default `0.2.0-rc.2`) prints a scratch `dsh web` URL. Drive it in a browser (Claude in Chrome) and screenshot the Models card and the Plugins page. `test/ui/scratch-web.sh stop <dir>` stops it. What the script does:
+  - `E2E_DSH_HOME=<home>` boots an existing `DSH_HOME` instead of a throwaway one.
+- **Clean install:** `test/e2e/clean-install.sh [spec]` (env `DSH_VERSION`). It installs `spec` the way a user would, then checks the installed copy headless and on `dsh web`; see [Phase 3 results](#phase-3-results-2026-10-07).
+  - The default spec is an `npm pack` of the checkout. Before a release, pass `github:AmmarByFar/dsh-trustedrouter#<tag>`.
+  - It doesn't open a browser. For that, run `PLUGIN_SPEC=<spec> test/ui/scratch-web.sh start <fresh dir>`.
+- **UI:** `test/ui/scratch-web.sh start <dir>` (env `DSH_VERSION`, default `0.2.0-rc.2`; `PLUGIN_SPEC`, default `link:<repo>`) prints a scratch `dsh web` URL. Drive it in a browser (Claude in Chrome) and screenshot the Models card and the Plugins page. `test/ui/scratch-web.sh stop <dir>` stops it. What the script does:
   1. Shims `pnpm` through corepack under `<dir>/bin`. corepack downloads pnpm on first use; Phase 0 and 2 got 12.9.1.
-  2. Installs this repo into `<dir>/home`, profile `web`, with `plugin --profile web add link:<repo>`.
+  2. Installs this repo into `<dir>/home`, profile `web`, with `plugin --profile web add link:<repo>` (or `$PLUGIN_SPEC`). A `<dir>` that already has it installed is reused as is.
   3. Starts `test/e2e/mock-openai.mjs`.
   4. Writes the profile patch once. Later starts only repoint the mock's port, so UI saves survive restarts. The patch has:
      - `llm-pi-ai` with routes `trustedrouter` (the real gateway, a dummy key, models `z-ai/glm-5.3`, `anthropic/claude-haiku-4.5` and `z-ai/glm-5.3:nitro`) and `mockrouter` (the mock, `mock-model`);
@@ -396,9 +428,11 @@ Results:
   
   Navigating the UI:
   - Opening the printed URL sets the auth cookie (a 303 to `./`). The first load shows a Preview Notice; click Continue.
-  - Plugins: sidebar **Plugins** → Installed → TrustedRouter privacy → the component row's `>` ("Configure TrustedRouter privacy").
+  - Plugins: sidebar **Plugins** → Installed → TrustedRouter privacy (`aria-label` "View TrustedRouter privacy") → the component row's `>` ("Configure TrustedRouter privacy").
   - Models: **Settings** → **Models** → a gateway card → **Privacy & routing**.
-  - Screenshots fail while the Chrome window is hidden (`document.visibilityState === 'hidden'`). Clicks by ref may not navigate then either, but DOM reads and `element.click()` still work. React selects need the native value setter plus a `change` event.
+  - In Phase 2, screenshots failed while the Chrome window was hidden (`document.visibilityState === 'hidden'`). In Phase 3 they worked in that state. If they fail, DOM reads and `element.click()` still work. React selects need the native value setter plus a `change` event.
+  - For README images, use `computer` `zoom` with `save_to_disk` on a region, after moving the mouse out of it.
+  - Editing the scratch profile's `cordis.patch.yml` by hand reloads live. Don't truncate it: dsh appends rows to it, e.g. `ui-settings-general` after the Preview Notice.
 - **Live check:** with `log: true`, real chats print `added provider to POST https://api.trustedrouter.com/v1/chat/completions for <model>: {...}`.
   - Negative test: a Standard-tier model (e.g. `anthropic/claude-haiku-4.5`) with `min_privacy: confidential` is refused with a 400, as confirmed in Phase 2.
 - **Direct API checks** (no dsh): POST `https://api.trustedrouter.com/v1/chat/completions` with `max_tokens: 5` and a `provider` object. `deepseek/deepseek-v4.1-flash` is cheap and has one provider at each tier (Client half §5).
@@ -408,7 +442,7 @@ Results:
 
 - **The fetch wrapper depends on pi-ai and SDK internals.** If it stops being called, requests go out **without** `provider` and no error. Mitigations: the weekly CI end-to-end run and a documented verification.
 - **dsh is pre-stable.** Slot and API names may change, so the README lists tested dsh versions.
-- **A broken client half can break web boot.** Clean-install test before every release.
+- **A broken client half can break web boot.** Before every release, run `clean-install.sh` with the tag and load the page in a browser.
 - **Session attribution is unverified.** `ctx.on('llm/stream')` (read-only, frozen options) and `ctx.agents.currentInitiator()` (AsyncLocalStorage) exist, but propagation into pi-ai's fetch hasn't been tested. This only matters for per-chat overrides, which are out of v1.
 
 ## Reference: dsh source locations (0.2.1-alpha.1 clone; same in rc.2 unless noted)

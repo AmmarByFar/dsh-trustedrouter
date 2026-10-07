@@ -9,6 +9,8 @@
 # A `# expect-provider: <json>` line in <row.yml> makes the run fail unless the mock saw at
 # least one POST and every POST carried exactly that `provider`; --control expects none.
 # Env: DSH_VERSION (default: latest), e.g. DSH_VERSION=0.2.0-rc.2 or DSH_VERSION=alpha.
+#      E2E_DSH_HOME: boot this DSH_HOME (clean-install.sh passes one with the plugin installed)
+#      instead of a throwaway one.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -16,6 +18,7 @@ repo=$(cd "$here/../.." && pwd)
 row=${1:?usage: run-headless.sh <row.yml> | --control}
 
 work=$(mktemp -d)
+home=${E2E_DSH_HOME:-$work/home}
 mock=
 cleanup() { [ -n "$mock" ] && kill "$mock" 2>/dev/null; rm -rf "$work"; }
 trap cleanup EXIT
@@ -51,7 +54,7 @@ else
 fi
 
 echo "== dsh ${DSH_VERSION:-latest}, mock at $base, row: $row" >&2
-MOCK_KEY=dummy DSH_HOME="$work/home" npx --yes "@deepseek-ai/dsh@${DSH_VERSION:-latest}" \
+MOCK_KEY=dummy DSH_HOME="$home" npx --yes "@deepseek-ai/dsh@${DSH_VERSION:-latest}" \
   --profile headless --patch "$work/overlay.yml" "reply with the single word pong"
 
 echo "== requests seen by the mock" >&2

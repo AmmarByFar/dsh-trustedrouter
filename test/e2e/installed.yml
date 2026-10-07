@@ -1,0 +1,10 @@
+# For clean-install.sh: configures the row the installed bundle inserts, so it only takes effect when
+# the package is installed in the profile. Not in rows/, which mount this checkout by path.
+# expect-provider: {"min_privacy":"confidential","sort":"price"}
+- id: trustedrouter
+  config:
+    gateways: [__MOCK_BASE__]
+    defaults: { sort: price }
+    models:
+      mock-model: { min_privacy: confidential }
+    log: true
