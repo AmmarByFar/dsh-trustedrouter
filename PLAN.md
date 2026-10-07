@@ -2,7 +2,7 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-10-07):** plan agreed. **Next step is Phase 0 (spikes).** Nothing is built in this repo yet.
+**Status (2026-10-07):** Phase 0 done; all four pass criteria met on dsh 0.2.0-rc.2 (see [Phase 0 results](#phase-0-results-2026-10-07)). **Next step is Phase 1 (host half).** The repo is private on GitHub with `main` only; the spike branch was deleted.
 
 ## Background: why a plugin
 
@@ -24,7 +24,7 @@ A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
 | 2 | Models page offers: privacy floor, provider allow/block (`only`/`ignore`), `sort`, US-only (`jurisdiction`), billing (`usage`). Advanced fields (`max_price`, `order`, `allow_fallbacks`, raw JSON) go on the plugin's own Plugins page | Proposed; confirm with user |
 | 3 | GitHub first; npm publish later | Proposed; confirm with user |
 | 4 | Per-chat (composer) privacy override is **not** in v1 | Proposed; confirm with user |
-| 5 | Public vs private repo during development. Private needs git credentials for the pnpm install test | **Ask user at Phase 0** |
+| 5 | Public vs private repo during development | **Confirmed: private** until Phase 4. Created 2026-10-07. Git installs work on the maintainer's machine through gh's credential helper |
 
 "Official" is not achievable. dsh's CONTRIBUTING.md says the team is not accepting outside PRs, and the Plugins page's "Official" group is a hard-coded list of plugins shipped with dsh. The sanctioned route is a public repo with the `dsh-plugin` topic, which community registries pick up automatically.
 
@@ -33,8 +33,9 @@ A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
 ### Package layout: plain JS, no build step
 
 ```
-package.json       exports {".": "./index.js", "./client": "./client.js", "./locale/*.json", "./icon"},
-                   dsh.bundle.patch, dsh.client {platform: "web"}, peerDependencies {"@deepseek-ai/schemastery"}
+package.json       exports {".": "./index.js", "./client": "./client.js", "./locale/*.json", "./icon", "./package.json"},
+                   top-level "icon": "./icon.svg", dsh.bundle.patch, dsh.client {platform: "web", inject: [...]},
+                   peerDependencies + devDependencies {"@deepseek-ai/schemastery"}
 index.js           host half: volatile Config schema plus the fetch wrapper with per-model merge
 client.js          browser half: window.__ModuleLoader__.load({ id, factory(require) {...} }), React via require('react')
 cordis.patch.yml   bundle layer: inserts row `id: trustedrouter`, `name: dsh-trustedrouter` (the bare package name, needed for the client half)
@@ -43,11 +44,13 @@ icon.svg
 test/              node:test unit tests, plus test/e2e (headless dsh against mock-openai.mjs)
 ```
 
-- **No build step.** A git install then needs no `prepare` script, so pnpm doesn't ask for `allowBuilds`. This is inferred from the docs and must be verified in Phase 0.
+- **No build step.** A git install then needs no `prepare` script, so pnpm doesn't ask for `allowBuilds`. Verified in Phase 0.
 - **Template to copy.** dsh ships a plain-JS starter: `packages/preset/agent-preset/skills/cordis-plugin-development/templates/decoration/` (`package.json`, `cordis.patch.yml`, `index.js`, `client.js`, `locale/en.json`, `icon.svg`).
   - The same skill folder has `references/ui-plugin.md` and `references/practices.md`.
   - It is also present in the installed rc.2 copy at `node_modules/@deepseek-ai/dsh-agent-preset/skills/...`.
 - **Dependencies.** Do not declare `@deepseek-ai/dsh*` peers. The install-time compatibility gate requires every `dsh*` peer range to satisfy the running version, and `^0.2.0` does not satisfy `0.2.0-rc.2`. `@deepseek-ai/schemastery` and `@deepseek-ai/cordis` are not gated.
+  - **How the schemastery peer resolves (verified in Phase 0).** Profiles use `nodeLinker: hoisted` and `autoInstallPeers: false`, so pnpm installs no copy and prints only a peer warning. dsh's "runtime resolution" then answers the import from its own install.
+  - **Path-mounted rows don't get that resolution.** A row like `name: /abs/path/index.js` fails with "failed to import". Local dev therefore needs schemastery in the repo's `node_modules`, for both `node --test` and path-mounted headless e2e. Make it a devDependency in Phase 1; Phase 0 used a symlink to rc.2's copy.
 - **Client imports.** The client may `require` only the shell's shared modules:
   - `react`, `react/jsx-runtime`, `react-dom`, `react-dom/client`
   - `@deepseek-ai/cordis`
@@ -55,7 +58,9 @@ test/              node:test unit tests, plus test/e2e (headless dsh against moc
   
   The template's practices doc advises plain-JS plugins not to require `ui-primitives`; copy the markup and use `--dsw-alias-*` CSS tokens instead.
 - **Boot risk.** A malformed `dsh.client` declaration or a missing `client.js` fails the client-modules fiber, which can break web boot. Test installs carefully.
-- **`immediately`.** The template sets `dsh.client.immediately: true`, but dsh's AGENTS.md says it's for infrastructure rows only. Try without it first.
+- **`immediately`.** The template sets `dsh.client.immediately: true`, but dsh's AGENTS.md says it's for infrastructure rows only. Phase 0 works without it; leave it out.
+- **`dsh.client.inject`.** `["@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-client-ui-plugin-manager", "@deepseek-ai/dsh-client-ui-settings-models"]` works on rc.2, following the agent-loop example.
+- **Icon.** rc.2 reads a plugin icon only from the exported `./package.json`'s top-level `"icon"` field (`readPluginMeta` in `dsh-app-boot`). The `./icon` export fallback exists only in the 0.2.1-alpha source. The spike exported `./icon` alone and got the default artwork. Do both.
 
 ### Host half (`index.js`)
 
@@ -86,7 +91,11 @@ Request handling follows the prototype:
 1. **Models page (main UX).** `ctx.slots.inject('settings.models.provider-card', ...)` registers a keyed entry under key **`llm-pi-ai`**, the settings namespace of pi-ai routes.
    - The slot lives in `packages/client/ui-settings-models/src/client/slot-contract.ts` and is present in rc.2. Nothing ships a registrant for it.
    - Props: `{ provider: { provider, displayName, settingsNs, settingsPath, active, declared?, error? }, configured, keyConfigured }`.
-   - **Neither the props nor the provider's directory entry includes the baseURL.** Read it from `ctx.configForms.get('llm-pi-ai')` (snapshot `value.providers[route].baseURL` / `.models`). This is unverified; it's spike (b).
+     - Seen on rc.2: `{"provider":"trustedrouter","displayName":"trustedrouter","settingsNs":"llm-pi-ai","settingsPath":["providers","trustedrouter"],"active":true,"declared":true}`.
+     - The renderer kit adds `renderFactorySlot`, `usePanelInfo`, `useResource`, `useSessionRetainInfo`, `useSessionStatus`, `useSessions` and `useWorkspaces`, plus whatever the entry's `inject()` returns.
+   - **Neither the props nor the provider's directory entry includes the baseURL.** Read it from `ctx.configForms.get('llm-pi-ai')`: snapshot `value.providers[route].baseURL` and `.models[].id`.
+     - Verified in Phase 0: `status=ready`, `mode=host`, `writable=true`. The settings path is `props.provider.settingsPath`.
+   - The entry renders on **every** pi-ai card. In Phase 0 that was both the TrustedRouter and mock routes, so filter by baseURL.
    - Render the section only when the baseURL is a configured gateway. Show one row per model:
      - privacy dropdown limited to the levels that model can reach, labelled with the qualifying providers;
      - provider allow/block lists;
@@ -96,6 +105,11 @@ Request handling follows the prototype:
    - There is **no per-model slot**, so the whole per-model table lives inside this provider-card area.
 2. **Plugins page.** Register `plugins.row.config` keyed `dsh-trustedrouter#trustedrouter`, with `view: 'page'` for the form and `'summary'` for the card.
    - The page passes `form` (a `ConfigPageForm` with `state` and `mutate(ops, expectedRevision)`) only when the row id is a served settings namespace, i.e. Config has volatile fields.
+   - Verified in Phase 0:
+     - The row's `>` link opens the page, and `form` is present.
+     - `form.mutate([{ op: 'set', path: ['minPrivacy'], value }], form.state.revision)` resolves `true`, and the profile patch gains the `trustedrouter` row.
+     - The host gets `loader/volatile-update [["minPrivacy"]]` with no remount, and the next POSTs see the new value. It survives a restart.
+     - None of this needs `patchReload: live`.
    - This page holds gateways, defaults, advanced fields, raw rules and the log toggle.
    - Do **not** use `plugins.item`; it's reserved for official pages.
 3. **Saving.** `ctx.configForms.get('trustedrouter')` returns `getSnapshot()` (`status, value, base, user, revision, writable, mode`), `subscribe()`, `mutate([{op:'set'|'unset', path, value}], expectedRevision)`, `set` and `unset`.
@@ -103,7 +117,9 @@ Request handling follows the prototype:
    - Writes only work on loopback pages.
    - The home patch and `--patch` overlays win, and a write they would shadow is refused.
    - There is no schema-to-form renderer; build the form by hand. The official example is `packages/client/ui-settings-agent-loop/src/client/*`.
-4. **Text.** `ctx.locale.register(NS, 'en', dict)`, then register entries with `locale: NS` so components get `t`.
+4. **Text.** Register the dictionary, then register entries with `locale: NS` so components get `t`.
+   - **The signature differs between versions.** rc.2 has `ctx.locale.register(ns, locale, dict)`; the 0.2.1-alpha source has `ctx.locale.register(ns, { en, zh })`. Feature-detect, e.g. on `register.length`, and test on both.
+   - The spike used no locale, so this is untested at runtime.
 5. **Model data.** `GET https://api.trustedrouter.com/v1/models` is public, needs no key, and sends `Access-Control-Allow-Origin: *`, so the browser can fetch it directly. Keep it a simple GET with no custom headers, because preflight OPTIONS returns 401. Cache it.
    - Each `data[i].trustedrouter` has `privacy_tier` and `privacy_tier_label` (the model's maximum) and `endpoints[]`.
    - Endpoint fields include `id`, `provider`, `provider_name`, `usage_type` (Credits/BYOK), `privacy_tier`, `privacy_tier_label`, `provider_confidential_compute`, `provider_e2ee`, `provider_zero_data_retention`, `provider_headquarters_country`, `provider_us_based`, `supported_parameters`.
@@ -112,6 +128,10 @@ Request handling follows the prototype:
    - Example: `z-ai/glm-5.3` has 48 endpoints, and only `tinfoil` and `privatemode` are tier 3.
    - `/v1/models/{id}/endpoints` and `/v1/providers` need an API key; avoid them.
    - Treat the JSON as unversioned: tolerate missing fields, and show all levels with a warning for unknown models.
+6. **Registration shape (verified in Phase 0).**
+   - The factory returns `{ inject: ['slots', 'configForms'], apply(ctx) {...} }`.
+   - Keyed entries use `ctx.slots.inject(slot, () => ctx.slots.register({ name: slot, key, inject: () => ({ ... }) }, Component))`. The `inject()` result is spread into props.
+   - Forms bind with `React.useSyncExternalStore(form.subscribe, form.getSnapshot)`. `ctx.configForms.describe()` gives the served-namespace mirror.
 
 ### TrustedRouter `provider` fields (from /docs/provider-routing)
 
@@ -136,7 +156,7 @@ Model suffixes `:nitro` and `:floor` set `sort`. Aliases `trustedrouter/zdr`, `/
 
 ## Phases
 
-### Phase 0: spikes (about half a day). START HERE.
+### Phase 0: spikes. DONE 2026-10-07; see results below.
 
 Goal: prove the three risky pieces before writing the real plugin.
 
@@ -162,9 +182,36 @@ Goal: prove the three risky pieces before writing the real plugin.
    - If (c) fails, keep YAML config, with the UI read-only plus copy-paste snippets.
 7. **Record results in this file** (update Status and the relevant design notes), then delete the spike branch.
 
+#### Phase 0 results (2026-10-07)
+
+Setup:
+- dsh 0.2.0-rc.2, pnpm 12.9.1 via the corepack shim, and a scratch `DSH_HOME` under the session scratchpad.
+- Spike commit `ecdeb56`, on `spike/phase-0` (since deleted).
+- Routes: a TrustedRouter pi-ai route with a dummy key, plus a mock route as the default model.
+- The live profile and the 3080 server were not touched.
+
+Results:
+- **(a) Pass.**
+  - `dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#spike/phase-0` gave no build prompt. The only output was a schemastery peer warning.
+  - The bundle appears under Plugins → Installed with its locale title and description.
+  - The private repo installed through gh's credential helper.
+- **(b) Pass.** The provider-card entry rendered inside each pi-ai card, with the route's baseURL and model ids read from `ctx.configForms.get('llm-pi-ai')`. Details are in Client half §1.
+- **(c) Pass.** Save → patch → live volatile update → the next request prints the new value, with no restart. It survives a restart too. Details are in Client half §2.
+- **(d) Pass.**
+  - No console errors or warnings on boot or reload.
+  - Turning the bundle off unhooks the fetch wrapper (chats reach the mock with no spike line), and the page stays healthy.
+  - Turning it back on reloads the host half live with the saved value.
+- **Headless.** A path-mounted spike row printed the volatile value on both POSTs, once schemastery was resolvable (see Dependencies).
+- **Not yet checked:**
+  - anything on 0.2.1-alpha (Phase 3);
+  - the locale API at runtime (Client half §4);
+  - the `view: 'summary'` fallback, which wasn't needed because the row has a description;
+  - the add-provider draft card (`configured=false`).
+
 ### Phase 1: host half
 
 - Start from the prototype's `index.js` and tests.
+- Add `@deepseek-ai/schemastery` as a devDependency so `node --test` and path-mounted e2e rows can import it. Keep the peer.
 - Switch Config to a volatile schemastery schema: gateways, defaults, models, rules, log.
 - Add per-model merging. Keep fail-closed and the stderr logging.
 - Tests:
@@ -175,6 +222,8 @@ Goal: prove the three risky pieces before writing the real plugin.
 
 - Models-page section with model-aware dropdowns from the TrustedRouter model list.
 - Plugins-page config page.
+- Fix the icon: export `./package.json` and set `"icon": "./icon.svg"` (see Package layout).
+- Locale registration that works on both rc.2 and 0.2.1-alpha.
 - Locale text, icon and card metadata.
 
 ### Phase 3: packaging and verification
