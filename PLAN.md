@@ -137,6 +137,7 @@ Config is a `@deepseek-ai/schemastery` schema. Every field is `.volatile()`, so 
    - **The signature differs between versions.** rc.2 has `ctx.locale.register(ns, locale, dict)`; the 0.2.1-alpha source has `ctx.locale.register(ns, { en, zh })`. Feature-detect, e.g. on `register.length`, and test on both.
    - The spike used no locale, so this is untested at runtime.
 5. **Model data.** `GET https://api.trustedrouter.com/v1/models` is public, needs no key, and sends `Access-Control-Allow-Origin: *`, so the browser can fetch it directly. Keep it a simple GET with no custom headers, because preflight OPTIONS returns 401. Cache it.
+   - dsh web pages set no Content-Security-Policy: none in rc.2's response headers or `index.html`, and the webserver source sets none. So `connect-src` doesn't block this fetch. The Electron desktop app is out of scope (`platform: "web"`).
    - Each `data[i].trustedrouter` has `privacy_tier` and `privacy_tier_label` (the model's maximum) and `endpoints[]`.
    - Endpoint fields include `id`, `provider`, `provider_name`, `usage_type` (Credits/BYOK), `privacy_tier`, `privacy_tier_label`, `provider_confidential_compute`, `provider_e2ee`, `provider_zero_data_retention`, `provider_headquarters_country`, `provider_us_based`, `supported_parameters`.
    - Tiers: 0 Standard, 1 No-store, 2 Zero retention, 3 Confidential + E2EE + ZDR.
@@ -246,13 +247,46 @@ Results:
 - **Dev setup:** `npm install` installs the schemastery devDependency. `package-lock.json` is git-ignored: the only dependency is that devDependency, and at runtime dsh supplies its own copy. Bare `node --test` would also pick up `test/e2e/mock-openai.mjs` and `.ref/`, so use `npm test`.
 - **Not done here:** a git install of this version. devDependencies should not trigger pnpm's build approval without a `prepare` script, but that's checked in Phase 3's clean-install test.
 
-### Phase 2: client half
+### Phase 2: client half. NEXT.
 
-- Models-page section with model-aware dropdowns from the TrustedRouter model list.
-- Plugins-page config page.
-- Fix the icon: export `./package.json` and set `"icon": "./icon.svg"` (see Package layout).
-- Locale registration that works on both rc.2 and 0.2.1-alpha.
-- Locale text, icon and card metadata.
+Everything the client needs is in [Client half](#client-half-clientjs). Its §6 has the registration shape proven in Phase 0. The Phase 0 spike code itself is gone, but §1, §2 and §6 hold what mattered.
+
+**Steps:**
+
+1. **Dev loop first.** Set up a scratch web (see [Testing → UI](#testing)) and find a fast install path.
+   - Phase 0 used a git install of a pushed branch. That works, but every push needs the user's approval.
+   - Try a local install instead: `dsh plugin --profile web add link:/abs/path/to/repo`, or `file:`. Unverified.
+   - The client half only attaches to a row whose `name` is the bare package name. A path-mounted row (`name: /abs/.../index.js`) gets the host half but no client.
+   - Client edits may hot-reload: the client-modules HMR polls bundle mtimes. Host edits need a `dsh web` restart.
+   - Worth scripting the recipe as `test/ui/scratch-web.sh`.
+2. **Package files.**
+   - `package.json`: add exports `./client`, `./locale/*.json` and `./icon`; top-level `"icon": "./icon.svg"` (`./package.json` is already exported); add `client.js`, `locale/*.json` and `icon.svg` to `files`.
+   - `package.json`: `dsh.client: { platform: "web", inject: [...] }` using the three packages from Package layout, without `immediately`.
+   - Add `locale/en.json` (`meta.title` and `meta.description`) and `icon.svg`.
+3. **`client.js`, Models page.** An entry on `settings.models.provider-card` keyed `llm-pi-ai`:
+   - Read the route from `ctx.configForms.get('llm-pi-ai')`: `value.providers[props.provider.provider]` gives `baseURL` and `models[].id`. Read the policy from `ctx.configForms.get('trustedrouter')`.
+   - Render only when the route's baseURL falls under a configured gateway. Use the host's prefix rule; it renders on every pi-ai card.
+   - One row per model with the Decision 2 controls: privacy floor (limited to the levels the model can reach, from the model list), `only`/`ignore`, `sort`, US-only (`jurisdiction: "us"`), and billing (`usage`).
+   - Save with `form.mutate([{ op: 'set' | 'unset', path: ['models', modelId, field], value }], snapshot.revision)`.
+4. **`client.js`, Plugins page.** An entry on `plugins.row.config` keyed `dsh-trustedrouter#trustedrouter`:
+   - `view: 'page'` holds gateways, defaults, the advanced fields (`max_price`, `order`, `allow_fallbacks`), raw `rules` as JSON, and the `log` toggle.
+   - `view: 'summary'` is a one-liner.
+5. **Text and style.**
+   - Inline English dictionary in `client.js`; a no-build client can't import JSON. Feature-detect the `ctx.locale.register` signature (Client half §4).
+   - Style with `--dsw-alias-*` tokens, copying the host markup. Don't `require` ui-primitives.
+6. **Verify.**
+   - In a scratch web on rc.2 and 0.2.1-alpha: screenshots, no console errors, saves land in the patch, the host's `log: true` lines show the new policy, and disable/enable keeps boot healthy.
+   - Add unit tests for any pure client helpers (e.g. the tier → `min_privacy` mapping) if they're split into a module the tests can import.
+
+**Open questions to settle during Phase 2:**
+
+- **Nested-path writes.** Does `mutate` with `path: ['models', 'z-ai/glm-5.3', 'min_privacy']` work when the model id contains `/` and `.`?
+  - Does it create the intermediate `models.<id>` object?
+  - Does `unset` of a model's last field leave an empty `{}` entry behind? If so, unset the model key instead.
+- **Tier → `min_privacy` mapping.** Assumed 1 → `no_store`, 2 → `zdr`, 3 → `confidential`. Confirm against TrustedRouter, e.g. with a real request on a model whose highest tier is known.
+- **Form shape.** What `ctx.configForms.get('trustedrouter').getSnapshot()` holds when the user layer is empty (`value` vs `base` vs `user`), and how to show "inherited from defaults".
+- **Draft card.** What to render on the add-provider draft card (`configured=false`).
+- **Locale on alpha.** The locale call has only been read in source; it hasn't been run.
 
 ### Phase 3: packaging and verification
 
@@ -294,7 +328,22 @@ Results:
 - **Host end-to-end:** `test/e2e/run-headless.sh <row.yml>`, i.e. `dsh --profile headless` in a scratch `DSH_HOME` against `test/e2e/mock-openai.mjs`. It asserts the recorded request bodies against the row's `# expect-provider:` line.
   - `test/e2e/run-all.sh` runs every row in `test/e2e/rows/` plus the control run without the plugin (which expects no `provider`).
   - `dsh headless` prints the plugin's stderr lines, which is useful for asserting logging.
-- **UI:** a scratch `dsh web --port 0 --no-open` driven in a browser; screenshot the Models card and the Plugins page.
+- **UI:** a scratch `dsh web --port 0 --no-open` driven in a browser (Claude in Chrome); screenshot the Models card and the Plugins page. The recipe used in Phase 0, with `<s>` as a scratch directory:
+  1. pnpm shim: `mkdir -p <s>/bin && printf '#!/bin/sh\nexec corepack pnpm "$@"\n' > <s>/bin/pnpm && chmod +x <s>/bin/pnpm`. corepack downloads pnpm on first use; Phase 0 got 12.9.1.
+  2. Install into a scratch profile: `DSH_HOME=<s>/home PATH=<s>/bin:$PATH npx --yes @deepseek-ai/dsh@0.2.0-rc.2 plugin --profile web add <spec>`. This creates the profile.
+  3. Mock LLM: `node test/e2e/mock-openai.mjs <s>/requests.jsonl <s>/port &`.
+  4. Write `<s>/home/profiles/web/cordis.patch.yml` with two rows:
+     - `llm-pi-ai` (`name: "@deepseek-ai/dsh-llm-pi-ai"`), `config.providers` with two routes:
+       - `trustedrouter`: `api: openai-completions`, `baseURL: https://api.trustedrouter.com/v1`, `apiKeyEnv: TRUSTEDROUTER_API_KEY`, models `z-ai/glm-5.3` and `anthropic/claude-haiku-4.5`;
+       - `mockrouter`: the same `api`, `baseURL: http://127.0.0.1:<port>/v1`, `apiKeyEnv: MOCK_KEY`, model `mock-model` with `contextWindow: 131072`.
+     - `agent-default-model` (`name: "@deepseek-ai/dsh-agent-default-model"`) with `provider: mockrouter` and `model: mock-model`, so chats hit the mock.
+  5. Start it: `TRUSTEDROUTER_API_KEY=dummy MOCK_KEY=dummy DSH_HOME=<s>/home PATH=<s>/bin:$PATH npx --yes @deepseek-ai/dsh@0.2.0-rc.2 web --port 0 --no-open > <s>/web.log 2>&1 &`.
+     - `web.log` prints `dsh web: http://127.0.0.1:<port>/?token=...`. Opening it sets the auth cookie (a 303 to `./`), and the plugin's stderr lines land in the same log.
+  6. Navigating the UI:
+     - First load shows a Preview Notice; click Continue.
+     - Plugins: sidebar **Plugins** → Installed → the bundle → the component row's `>` link opens the row config page.
+     - Models: **Settings** → **Models**, where the provider cards are.
+  7. **Stop it by port, never by process name:** `ss -ltnp | grep :<port>`, then kill that PID. The live dsh on 3080 is also `node`/`npx`.
 - **Live check:** with `log: true`, real chats print `added provider to POST https://api.trustedrouter.com/v1/chat/completions for <model>: {...}`.
   - Negative test: a Standard-tier model (e.g. `anthropic/claude-haiku-4.5`) with `min_privacy: confidential` should be refused by TrustedRouter.
 
