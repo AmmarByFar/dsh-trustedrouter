@@ -1,0 +1,6 @@
+# Bundle layer applied when a profile installs this package. It mounts the
+# plugin with the schema defaults; the web UI (or the profile's own
+# cordis.patch.yml) sets gateways, defaults, per-model overrides, rules and log.
+- insert:
+    - id: trustedrouter
+      name: dsh-trustedrouter

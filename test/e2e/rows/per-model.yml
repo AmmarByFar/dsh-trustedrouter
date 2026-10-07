@@ -1,0 +1,11 @@
+# The default model (mock-model) has an override, merged over the defaults.
+# expect-provider: {"min_privacy":"confidential","sort":"price","only":["tinfoil"]}
+- insert:
+    - id: trustedrouter
+      name: __REPO__/index.js
+      config:
+        gateways: [__MOCK_BASE__]
+        defaults: { min_privacy: zdr, sort: price }
+        models:
+          mock-model: { min_privacy: confidential, only: [tinfoil] }
+        log: true

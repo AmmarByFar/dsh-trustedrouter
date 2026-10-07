@@ -1,0 +1,11 @@
+# Only another model has an override, so mock-model gets the defaults alone.
+# expect-provider: {"min_privacy":"zdr"}
+- insert:
+    - id: trustedrouter
+      name: __REPO__/index.js
+      config:
+        gateways: [__MOCK_BASE__]
+        defaults: { min_privacy: zdr }
+        models:
+          z-ai/glm-5.3: { min_privacy: confidential }
+        log: true

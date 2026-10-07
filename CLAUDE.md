@@ -2,7 +2,7 @@
 
 A community DeepSeek Harness (dsh) plugin that adds TrustedRouter `provider` routing and privacy settings (e.g. `min_privacy`) to LLM request bodies, editable per model from the dsh web UI. Repo: `AmmarByFar/dsh-trustedrouter`.
 
-**Where we are:** Phase 0 (spikes) passed on dsh 0.2.0-rc.2; the results are in PLAN.md. **Pick up at Phase 1 (host half) in PLAN.md.** Update PLAN.md's Status line and design notes as phases complete, so the next session can resume from it.
+**Where we are:** Phases 0 (spikes) and 1 (host half, `index.js`) are done; the results are in PLAN.md. **Pick up at Phase 2 (client half) in PLAN.md.** Update PLAN.md's Status line and design notes as phases complete, so the next session can resume from it.
 
 If `CLAUDE.local.md` exists, read it at session start. It holds maintainer-machine notes: the live dsh setup, the working prototype's location, and accounts.
 
@@ -16,7 +16,12 @@ If `CLAUDE.local.md` exists, read it at session start. It holds maintainer-machi
   - Matching POSTs that can't be rewritten **fail closed**.
   - GETs and non-gateway URLs pass through untouched.
   - The plugin never logs request bodies; logs go to `console.error`, not `ctx.logger`.
-- Tests: `node --test` for units, and `test/e2e/run-headless.sh <row.yml>` (or `--control`) for a real headless dsh run against a mock. `DSH_VERSION=0.2.0-rc.2|alpha|latest` picks the dsh build.
+- Tests:
+  - Run `npm install` once; it installs the schemastery devDependency.
+  - `npm test` for units. Not bare `node --test`, which also picks up the mock server and `.ref/`.
+  - `test/e2e/run-all.sh` for real headless dsh runs against a mock: every `test/e2e/rows/*.yml` plus `--control`. Each row's `# expect-provider:` line is asserted.
+  - `test/e2e/run-headless.sh <row.yml>` runs a single row.
+  - `DSH_VERSION=0.2.0-rc.2|alpha|latest` picks the dsh build.
 
 ## Working against dsh
 

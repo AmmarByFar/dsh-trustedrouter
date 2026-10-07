@@ -2,3 +2,4 @@ node_modules/
 .ref/
 CLAUDE.local.md
 *.tgz
+package-lock.json

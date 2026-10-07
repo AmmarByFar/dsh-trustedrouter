@@ -2,7 +2,7 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-10-07):** Phase 0 done; all four pass criteria met on dsh 0.2.0-rc.2 (see [Phase 0 results](#phase-0-results-2026-10-07)). **Next step is Phase 1 (host half).** The repo is private on GitHub with `main` only; the spike branch was deleted.
+**Status (2026-10-07):** Phases 0 and 1 done. The host half (`index.js`) is built and passes 27 unit tests and the headless e2e suite on dsh 0.2.0-rc.2 and 0.2.1-alpha.1 (see [Phase 1 results](#phase-1-results-2026-10-07)). **Next step is Phase 2 (client half).** Decisions 2–4 still need the user's confirmation before Phase 2's UI work. The repo is private on GitHub.
 
 ## Background: why a plugin
 
@@ -62,28 +62,44 @@ test/              node:test unit tests, plus test/e2e (headless dsh against moc
 - **`dsh.client.inject`.** `["@deepseek-ai/dsh-client-ui-settings", "@deepseek-ai/dsh-client-ui-plugin-manager", "@deepseek-ai/dsh-client-ui-settings-models"]` works on rc.2, following the agent-loop example.
 - **Icon.** rc.2 reads a plugin icon only from the exported `./package.json`'s top-level `"icon"` field (`readPluginMeta` in `dsh-app-boot`). The `./icon` export fallback exists only in the 0.2.1-alpha source. The spike exported `./icon` alone and got the default artwork. Do both.
 
-### Host half (`index.js`)
+### Host half (`index.js`): built in Phase 1
 
-Config is a `@deepseek-ai/schemastery` schema. Its user-editable fields are `.volatile()`, so UI saves commit in place without a remount; read `config.x.get()` per request. Pattern: llm-pi-ai's `providers: z.dict(profile).default({}).volatile()`, and `docs/cookbook/adding-a-settings-card.md` §1 and §3.
+Config is a `@deepseek-ai/schemastery` schema. Every field is `.volatile()`, so UI saves commit in place without a remount. Each request reads all five values once. Pattern: llm-pi-ai's `providers: z.dict(profile).default({}).volatile()`, and `docs/cookbook/adding-a-settings-card.md` §1 and §3.
 
 ```yaml
 - id: trustedrouter
   name: dsh-trustedrouter
   config:
-    gateways: [https://api.trustedrouter.com/v1]   # EU gateway: https://api-europe-west4.quillrouter.com/v1
-    defaults: { min_privacy: zdr }                 # TrustedRouter `provider` fields for every model on those gateways
-    models:                                        # per-model overrides, keyed by the request body's `model`
+    gateways: [https://api.trustedrouter.com/v1]   # the default; EU gateway: https://api-europe-west4.quillrouter.com/v1
+    defaults: { min_privacy: zdr }                 # `provider` fields for every model on those gateways; default {}
+    models:                                        # per-model overrides, keyed by the request body's `model`; default {}
       z-ai/glm-5.3: { min_privacy: confidential, only: [tinfoil, privatemode] }
-    rules: []        # generic escape hatch from the prototype: [{ baseURL, body }] deep-merged into any POST body
+    rules: []        # escape hatch from the prototype: [{ baseURL, body }] deep-merged into any POST body
     log: false       # true prints "[trustedrouter] ..." lines to stderr (the dsh web terminal)
 ```
 
-Request handling follows the prototype:
-- Applies to POSTs whose URL falls under a gateway prefix (path-segment boundary).
-- Parses the JSON body, sets `body.provider = merge(body.provider, defaults, models[body.model])`, removes any stale `content-length`, and forwards.
-- Leaves GETs (model discovery) and other URLs alone.
-- **Fails closed:** a matching POST whose body isn't a JSON object is rejected, never sent bare.
-- **Logging goes to `console.error`, not `ctx.logger`.** Shipped dsh profiles mount no Cordis log exporter, so `ctx.logger` output is dropped.
+**Out of the box nothing changes.** The bundle row has no config, so the schema defaults apply: the TrustedRouter gateway, but no `defaults` and no `models`. Installing the plugin never starts producing 400s by itself; the user picks the policy.
+
+**Schema (`Provider`).**
+- The documented `provider` fields are type-checked, so a bad value fails at save time. Strict enums: `min_privacy` (with aliases `e2e` and `e2ee`), `sort`, `data_collection` and `usage` (with its aliases). `jurisdiction` is a free string so new jurisdictions need no update.
+- **Unknown keys pass through.** schemastery's `object` keeps unknown keys and can't declaratively reject them. That's safe because TrustedRouter's docs say unknown options return 400: a misspelled key fails loudly at TrustedRouter instead of vanishing.
+- **Gotcha:** schemastery fills a missing nested `object` field with `{}`. `max_price` therefore uses `.default(undefined)`; without it every request carried `max_price: {}`. Fields declared as unions (`sort`, the percentile fields, the lists) aren't filled in.
+- URLs (`gateways`, `rules[].baseURL`) must match `^https?://host[/path]`, with no query or fragment. A URL that passes but that `new URL` still rejects matches nothing; it never refuses other traffic.
+- **The schema survives the browser's JSON round trip.** The browser rebuilds it with `new Schema(json)` and validates values (checked in Node in Phase 1). Volatile `.get()` values are frozen and schemastery's dict resolver writes to its input, so never feed snapshots back through the schema.
+
+**Request handling:**
+- Only POSTs to a URL under a gateway (path-segment boundary) or under a rule's `baseURL` are considered. GETs (model discovery) and other URLs pass through untouched.
+- **The provider policy applies only when there is one** (non-empty `defaults` or `models`). With none, gateway POSTs aren't even parsed.
+- `provider = merge(defaults, models[model])`, and that result is merged over the request's own `provider`, so **the policy wins conflicts**. A non-object request `provider` is replaced. Arrays replace rather than concatenate.
+- **Model lookup:** an exact key first. Then, for an id with a routing suffix (`z-ai/glm-5.3:nitro`), the base model's key, so a floor set for a model also holds for its variants. Lookups use `Object.hasOwn`, so ids like `constructor` don't hit prototype keys.
+- **Rules:** every matching rule is deep-merged in order, after the provider policy, so rule fields win. The prototype applied only the first match.
+- A body that ends up unchanged (e.g. its model has no policy) is forwarded with the original arguments, byte for byte. Otherwise the body is re-serialized and any stale `content-length` is removed.
+- **Fails closed:** a POST that needs fields but whose body isn't a JSON object (including when the model can't be read) is rejected with `trustedrouter: refusing POST <url>: ... so provider cannot be added`. The refusal is always printed to stderr, even with `log: false`.
+- **Logging goes to `console.error`, not `ctx.logger`.** Shipped dsh profiles mount no Cordis log exporter, so `ctx.logger` output is dropped. With `log: true`:
+  - on load and on every `loader/volatile-update`: `provider policy for POSTs under <gateways>: defaults {...}, overrides for <model ids>`, plus one `merging {...} into POST bodies under <baseURL>` line per rule;
+  - per request: `added provider to POST <url> for <model>: {...}`, or `no provider policy for <model>; POST <url> sent unchanged`, and `added <keys> to POST <url> (rule for <baseURL>)` per rule.
+  
+  Request bodies are never printed; the model id and the configured fields are.
 - **Unloading:** restore the previous `globalThis.fetch` if ours is still on top; otherwise become a pass-through.
 
 ### Client half (`client.js`)
@@ -208,7 +224,7 @@ Results:
   - the `view: 'summary'` fallback, which wasn't needed because the row has a description;
   - the add-provider draft card (`configured=false`).
 
-### Phase 1: host half
+### Phase 1: host half. DONE 2026-10-07; see results below.
 
 - Start from the prototype's `index.js` and tests.
 - Add `@deepseek-ai/schemastery` as a devDependency so `node --test` and path-mounted e2e rows can import it. Keep the peer.
@@ -217,6 +233,18 @@ Results:
 - Tests:
   - unit tests (`node --test`);
   - headless end-to-end via `test/e2e/` asserting per-model `provider` values.
+
+#### Phase 1 results (2026-10-07)
+
+- **`index.js`** is the prototype grown as designed in [Host half](#host-half-indexjs-built-in-phase-1). It exports `name`, `Config`, `Provider`, `DEFAULT_GATEWAY`, `mergeBody`, `providerFor` and `apply`.
+- **Unit tests** (`npm test`, i.e. `node --test test/*.test.js`): 27 tests in `test/trustedrouter.test.js`. They cover merge, model lookup (suffix fallback, prototype keys), URL matching, multiple gateways, fail-closed with the stderr refusal, rules, live config updates without a remount, unload and pass-through, logging, and schema validation and absent-defaults.
+  - Mutation-checked: removing `max_price`'s `.default(undefined)` fails 14 tests, and turning the refusal into a pass-through fails 2.
+- **Headless e2e:** `test/e2e/run-all.sh` runs the control plus every `test/e2e/rows/*.yml`.
+  - Each row declares `# expect-provider: <json|none>`, and `run-headless.sh` fails unless every POST the mock saw carried exactly that `provider`. A deliberately wrong expectation exits 1.
+  - Rows: `per-model` (override merged over defaults), `defaults-only` (another model's override doesn't leak), `other-gateway` (a policy for the real gateway leaves the mock alone).
+  - All pass on 0.2.0-rc.2 and on 0.2.1-alpha.1 (`DSH_VERSION=alpha`).
+- **Dev setup:** `npm install` installs the schemastery devDependency. `package-lock.json` is git-ignored: the only dependency is that devDependency, and at runtime dsh supplies its own copy. Bare `node --test` would also pick up `test/e2e/mock-openai.mjs` and `.ref/`, so use `npm test`.
+- **Not done here:** a git install of this version. devDependencies should not trigger pnpm's build approval without a `prepare` script, but that's checked in Phase 3's clean-install test.
 
 ### Phase 2: client half
 
@@ -230,9 +258,9 @@ Results:
 
 - README (install via UI and CLI, the pnpm/corepack note, verification steps), LICENSE (MIT), CHANGELOG.
 - GitHub Actions:
-  - unit tests plus headless end-to-end;
+  - `npm install && npm test` plus `test/e2e/run-all.sh`;
   - a weekly scheduled run against `@deepseek-ai/dsh@latest` and `@alpha` to catch the fetch wrapper silently breaking.
-- Clean-install test into a fresh `DSH_HOME` (simulating another PC) on dsh 0.2.0-rc.2 and 0.2.1-alpha.1.
+- Clean-install test into a fresh `DSH_HOME` (simulating another PC) on dsh 0.2.0-rc.2 and 0.2.1-alpha.1. Confirm the devDependency causes no build-approval prompt.
 
 ### Phase 4: publish
 
@@ -255,12 +283,12 @@ Results:
 
 ## Testing
 
-- **Unit:** `node --test` covering merge, URL matching, fail-closed and config validation.
-- **Host end-to-end:** `test/e2e/run-headless.sh`, i.e. `dsh --profile headless` in a scratch `DSH_HOME` against `test/e2e/mock-openai.mjs`, asserting the recorded request bodies.
-  - Include a control run without the plugin.
+- **Unit:** `npm test` covering merge, model lookup, URL matching, fail-closed, live updates, logging and config validation.
+- **Host end-to-end:** `test/e2e/run-headless.sh <row.yml>`, i.e. `dsh --profile headless` in a scratch `DSH_HOME` against `test/e2e/mock-openai.mjs`. It asserts the recorded request bodies against the row's `# expect-provider:` line.
+  - `test/e2e/run-all.sh` runs every row in `test/e2e/rows/` plus the control run without the plugin (which expects no `provider`).
   - `dsh headless` prints the plugin's stderr lines, which is useful for asserting logging.
 - **UI:** a scratch `dsh web --port 0 --no-open` driven in a browser; screenshot the Models card and the Plugins page.
-- **Live check:** with `log: true`, real chats print `added provider to POST https://api.trustedrouter.com/v1/chat/completions`.
+- **Live check:** with `log: true`, real chats print `added provider to POST https://api.trustedrouter.com/v1/chat/completions for <model>: {...}`.
   - Negative test: a Standard-tier model (e.g. `anthropic/claude-haiku-4.5`) with `min_privacy: confidential` should be refused by TrustedRouter.
 
 ## Risks

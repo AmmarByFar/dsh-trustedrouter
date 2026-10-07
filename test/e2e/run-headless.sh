@@ -6,6 +6,8 @@
 # Usage: test/e2e/run-headless.sh <row.yml>      plugin row(s) to apply as a patch
 #        test/e2e/run-headless.sh --control      no plugin, for comparison
 # Placeholders in <row.yml>: __MOCK_BASE__ (mock route baseURL, ends in /v1), __REPO__ (this repo's root).
+# A `# expect-provider: <json>` line in <row.yml> makes the run fail unless the mock saw at
+# least one POST and every POST carried exactly that `provider`; --control expects none.
 # Env: DSH_VERSION (default: latest), e.g. DSH_VERSION=0.2.0-rc.2 or DSH_VERSION=alpha.
 set -euo pipefail
 
@@ -43,6 +45,9 @@ cat > "$work/overlay.yml" <<EOF
 EOF
 if [ "$row" != "--control" ]; then
   sed -e "s#__MOCK_BASE__#$base#g" -e "s#__REPO__#$repo#g" "$row" >> "$work/overlay.yml"
+  expect=$(sed -n 's/^# expect-provider: *//p' "$row")
+else
+  expect=none
 fi
 
 echo "== dsh ${DSH_VERSION:-latest}, mock at $base, row: $row" >&2
@@ -52,9 +57,19 @@ MOCK_KEY=dummy DSH_HOME="$work/home" npx --yes "@deepseek-ai/dsh@${DSH_VERSION:-
 echo "== requests seen by the mock" >&2
 node -e '
 const fs = require("fs")
-const file = process.argv[1]
-if (!fs.existsSync(file)) { console.log("(none)"); process.exit(0) }
-for (const line of fs.readFileSync(file, "utf8").trim().split("\n")) {
-  const r = JSON.parse(line)
+const { isDeepStrictEqual } = require("util")
+const [file, expect] = process.argv.slice(1)
+const requests = fs.existsSync(file) ? fs.readFileSync(file, "utf8").trim().split("\n").map(line => JSON.parse(line)) : []
+if (requests.length === 0) console.log("(none)")
+for (const r of requests) {
   console.log(r.method, r.url, "model=" + r.body?.model, "provider=" + JSON.stringify(r.body?.provider))
-}' "$work/requests.jsonl"
+}
+if (!expect) process.exit(0)
+const wanted = expect === "none" ? undefined : JSON.parse(expect)
+const posts = requests.filter(r => r.method === "POST")
+const wrong = posts.filter(r => !isDeepStrictEqual(r.body?.provider, wanted))
+if (posts.length === 0 || wrong.length > 0) {
+  console.error(`== FAIL: expected provider=${expect} on every POST; ${posts.length} POSTs, ${wrong.length} differ`)
+  process.exit(1)
+}
+console.error(`== PASS: ${posts.length} POSTs carried provider=${expect}`)' "$work/requests.jsonl" "$expect"

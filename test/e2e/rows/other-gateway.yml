@@ -1,0 +1,8 @@
+# The policy targets the real TrustedRouter gateway, so requests to the mock pass through.
+# expect-provider: none
+- insert:
+    - id: trustedrouter
+      name: __REPO__/index.js
+      config:
+        defaults: { min_privacy: confidential }
+        log: true

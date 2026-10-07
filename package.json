@@ -1,0 +1,32 @@
+{
+  "name": "dsh-trustedrouter",
+  "version": "0.0.0",
+  "description": "TrustedRouter privacy and routing settings per model for DeepSeek Harness (dsh)",
+  "keywords": ["dsh-plugin", "deepseek-harness", "trustedrouter"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AmmarByFar/dsh-trustedrouter.git"
+  },
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": ["index.js", "cordis.patch.yml"],
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  }
+}
