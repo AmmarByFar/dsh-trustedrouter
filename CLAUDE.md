@@ -2,7 +2,7 @@
 
 A community DeepSeek Harness (dsh) plugin that adds TrustedRouter `provider` routing and privacy settings (e.g. `min_privacy`) to LLM request bodies, editable per model from the dsh web UI. Repo: `AmmarByFar/dsh-trustedrouter`.
 
-**Where we are:** Phases 0 (spikes), 1 (host half, `index.js`), 2 (client half, `client.js`) and 3 (README, CI, clean-install checks) are done; the results are in PLAN.md. **Pick up at Phase 4 (publish) in PLAN.md.** CI passes on GitHub. Update PLAN.md's Status line and design notes as phases complete, so the next session can resume from it.
+**Where we are:** Phases 0 (spikes), 1 (host half, `index.js`), 2 (client half, `client.js`), 3 (README, CI, clean-install checks) and 4 (publish) are done; v0.1.0 is released and the repo is public. The results are in PLAN.md. **Pick up at Phase 5 (migrate the maintainer's machine) in PLAN.md**, which edits the live profile, so ask first. Update PLAN.md's Status line and design notes as phases complete, so the next session can resume from it.
 
 If `CLAUDE.local.md` exists, read it at session start. It holds maintainer-machine notes: the live dsh setup, the working prototype's location, and accounts.
 
@@ -31,8 +31,8 @@ If `CLAUDE.local.md` exists, read it at session start. It holds maintainer-machi
 - For dsh source, clone it into the git-ignored `.ref/`: `git clone --depth 1 https://github.com/deepseek-ai/deepseek-harness.git .ref/deepseek-harness`. PLAN.md's reference section lists the relevant files.
 - **Never touch the maintainer's live dsh** (profile `~/.dsh/profiles/web`, server on 127.0.0.1:3080) during development. Use a scratch `DSH_HOME` with `npx @deepseek-ai/dsh web --port 0 --no-open`, or the headless harness.
 - **Ask first** before:
-  - creating the GitHub repo or pushing;
-  - choosing public vs private;
+  - pushing, tagging or creating releases;
+  - changing the repo's visibility or settings;
   - running `corepack enable` globally;
   - editing the live profile;
   - publishing to npm.

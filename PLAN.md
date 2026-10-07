@@ -2,7 +2,7 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-10-07):** Phases 0 to 3 done. The host half (`index.js`) and the client half (`client.js`) are built. 89 unit tests pass (27 host, 62 client), the headless e2e suite passes, a clean install from GitHub works, and the UI was checked in a browser, all on dsh 0.2.0-rc.2 and 0.2.1-alpha.1. README, LICENSE, CHANGELOG and the CI workflow are written, and CI's first run passed on GitHub (see [Phase 3 results](#phase-3-results-2026-10-07)). **Next step is Phase 4 (publish).** All decisions are confirmed. The repo is private on GitHub.
+**Status (2026-10-07):** Phases 0 to 4 done: **v0.1.0 is released** and the repo is public ([release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.0)). The host half (`index.js`) and the client half (`client.js`) are built. 89 unit tests pass (27 host, 62 client), the headless e2e suite passes, a clean install from GitHub works, and the UI was checked in a browser, all on dsh 0.2.0-rc.2 and 0.2.1-alpha.1. README, LICENSE, CHANGELOG and the CI workflow are written, and CI passes on GitHub (see [Phase 3 results](#phase-3-results-2026-10-07) and [Phase 4 results](#phase-4-results-2026-10-07)). **Next step is Phase 5 (migrate the maintainer's machine), which edits the live profile, so ask first.** All decisions are confirmed.
 
 ## Background: why a plugin
 
@@ -24,7 +24,7 @@ A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 
 | 2 | Models page offers: privacy floor, provider allow/block (`only`/`ignore`), `sort`, US-only (`jurisdiction`), billing (`usage`). Advanced fields (`max_price`, `order`, `allow_fallbacks`, raw JSON) go on the plugin's own Plugins page | **Confirmed** 2026-10-07 |
 | 3 | GitHub first; npm publish later | **Confirmed** 2026-10-07 |
 | 4 | Per-chat (composer) privacy override is **not** in v1 | **Confirmed** 2026-10-07. Wanted for v2 or later; see [Later (v2+)](#later-v2) |
-| 5 | Public vs private repo during development | **Confirmed: private** until Phase 4. Created 2026-10-07. Git installs work on the maintainer's machine through gh's credential helper |
+| 5 | Public vs private repo during development | **Done:** private during development, **public since 2026-10-07** (Phase 4) |
 
 "Official" is not achievable. dsh's CONTRIBUTING.md says the team is not accepting outside PRs, and the Plugins page's "Official" group is a hard-coded list of plugins shipped with dsh. The sanctioned route is a public repo with the `dsh-plugin` topic, which community registries pick up automatically.
 
@@ -368,9 +368,7 @@ Results:
 - **Screenshots work while the window is hidden.** `document.visibilityState` was `hidden`, yet `computer` screenshots and `zoom` with `save_to_disk` worked. `zoom` crops at the viewport's full resolution; the screenshot frame itself is downscaled.
 - **Unit and e2e** re-run after the script changes: 89 unit tests, and `run-all.sh` on both versions.
 
-### Phase 4: publish
-
-Before starting, optionally trigger the workflow by hand (`gh workflow run test.yml`) to try the dist-tag matrix (`latest`, `alpha`).
+### Phase 4: publish. DONE 2026-10-07; see results below.
 
 Steps:
 - Bump `package.json` to `0.1.0`, and date the CHANGELOG entry.
@@ -382,7 +380,25 @@ Steps:
 - Optionally npm later.
 - Optionally post a GitHub Discussion on dsh asking for a native `extraBody`/`onPayload` setting in llm-pi-ai, which would retire the fetch wrapper.
 
-### Phase 5: migrate the maintainer's machine
+#### Phase 4 results (2026-10-07)
+
+- **Commit email.** Before going public, history was rewritten so that every commit uses the GitHub noreply address. The repo was then recreated rather than force-pushed, so no old SHAs stay reachable. Details are in `CLAUDE.local.md`.
+- **CI** on the release commit `3d3badf` ([run 37659435243](https://github.com/AmmarByFar/dsh-trustedrouter/actions/runs/37659435243)): unit 89/89, plus `run-all.sh` and `clean-install.sh` (package 0.1.0) on rc.2 and alpha.
+- **Released.**
+  - `package.json` is at 0.1.0, and the CHANGELOG entry is dated.
+  - An annotated tag `v0.1.0` (noreply tagger) and a GitHub release whose notes are the CHANGELOG entry plus install lines.
+- **Public**, with topics `dsh-plugin`, `deepseek-harness` and `trustedrouter`. The installed `gh` has no `--accept-visibility-change-consequences` flag; `--visibility public` alone worked.
+- **Release clean install** from the public repo, with git credentials hidden (`GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0`), as on another PC. It passed:
+  - rc.2 with `github:AmmarByFar/dsh-trustedrouter#v0.1.0`;
+  - alpha with `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.0`, the README's UI spec.
+  
+  The only warning was the expected peer warning.
+- **Not done:**
+  - npm (Decision 3, later).
+  - The dsh GitHub Discussion. Posting on another project needs the maintainer's go-ahead.
+  - The dist-tag matrix hasn't run yet. The first scheduled run is Monday; `gh workflow run test.yml` runs it now.
+
+### Phase 5: migrate the maintainer's machine. NEXT (ask first: it edits the live profile).
 
 - Install the release into the real `web` profile and move settings into the new `trustedrouter` row.
 - Remove the prototype's `extra-body` insert row and `~/dsh-extra-body` only after verifying (see `CLAUDE.local.md`).
