@@ -2,15 +2,9 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-11-15):** Phases 0 to 4 are done: **v0.1.0 is released** and the repo is public ([release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.0)). A 2026-11-15 upstream check found that TrustedRouter's model list no longer includes provider endpoints by default, which broke the Models page's privacy-floor choices in v0.1.0 (requests were unaffected). **Phase 4.5 (v0.1.1) is done locally except the release** ([results](#phase-45-results-2026-11-15)):
-- the client fetches `?include=endpoints`;
-- CI is on Node 24 with a refreshed matrix;
-- 92 unit tests pass (27 host, 65 client);
-- e2e and the clean install pass on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1, 0.2.2-alpha.3 and `next`;
-- the UI was checked in a browser on 0.2.2-rc.1;
-- the version is 0.1.1, and the work is committed but **not pushed or tagged**.
+**Status (2026-11-15):** Phases 0 to 4.5 are done. **v0.1.1 is released** ([release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.1)), and the repo is public. v0.1.1 fixes the Models page's privacy-floor choices, which TrustedRouter's 2026-11 model-list change broke in v0.1.0 (requests were unaffected). It has 92 unit tests (27 host, 65 client). CI is on Node 24 and passes on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1 and 0.2.2-alpha.3, plus the `latest`, `alpha` and `next` dist-tags. A clean install from the public tag works, and the UI was checked in a browser on 0.2.2-rc.1 (see [Phase 4.5 results](#phase-45-results-2026-11-15)).
 
-**Next:** push, tag and release `v0.1.1`, asking first (see the results' "Left" list). Then Phase 5 (migrate the maintainer's machine), which edits the live profile, so ask first. All decisions are confirmed.
+**Next:** [Phase 5](#phase-5-migrate-the-maintainers-machine-after-phase-45-ask-first-it-edits-the-live-profile) (migrate the maintainer's machine). It edits a live profile, so ask first, and ask which machine: the laptop runs the prototype on dsh 0.2.0-rc.2, and agent-server's own profile has v0.1.0 installed. All decisions are confirmed.
 
 ## Background: why a plugin
 
@@ -408,7 +402,7 @@ Steps:
   - The dsh GitHub Discussion. Posting on another project needs the maintainer's go-ahead.
   - The dist-tag matrix hasn't run yet. The first scheduled run is Monday; `gh workflow run test.yml` runs it now.
 
-### Phase 4.5: v0.1.1 maintenance. DONE 2026-11-15 except the release; see results below.
+### Phase 4.5: v0.1.1 maintenance. DONE 2026-11-15; see results below.
 
 #### Upstream check (2026-11-15)
 
@@ -471,14 +465,14 @@ Approved by the maintainer on 2026-11-15, along with the CI matrix: keep the old
   - Reload: no console messages.
   - Not re-checked in a browser on 0.2.0-rc.2/0.2.1-alpha.1; the client change doesn't touch any dsh API, and their e2e and clean installs passed.
 - **Release prep:**
-  - `package.json` is at 0.1.1, and the CHANGELOG has a dated 0.1.1 entry (re-date it if the release slips).
+  - `package.json` is at 0.1.1, and the CHANGELOG has a dated 0.1.1 entry.
   - README: install specs `#v0.1.1`, Requirements and "Tested with" (four versions, Node 24, with dsh 0.2.2 needing Node ≥ 24.9), the model-list URL, and the `DSH_VERSION` example.
-  - Committed locally, **not pushed or tagged**.
-- **Left (ask first):**
-  1. Push `main` and watch CI.
-  2. Tag `v0.1.1` and create the GitHub release from the CHANGELOG entry.
-  3. Run `clean-install.sh github:AmmarByFar/dsh-trustedrouter#v0.1.1` (on rc.2 and 0.2.2-rc.1), with git credentials hidden as in Phase 4.
-  4. Optionally `gh workflow run test.yml` to try the new dist-tag matrix.
+  - Committed as `c51578a`, with the author name "Ammar Mheir" (see `CLAUDE.local.md`).
+- **Released** (approved by the maintainer):
+  - Pushed `main`. CI [run 43778857404](https://github.com/AmmarByFar/dsh-trustedrouter/actions/runs/43778857404) passed: unit 92/92, and on all four pinned versions every e2e row, the clean install and the web check, on Node 24.22.2.
+  - Annotated tag `v0.1.1` (noreply tagger), and a [GitHub release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.1), marked Latest. Its notes are the CHANGELOG entry plus upgrade and install lines. The upgrade line says to uninstall and then install the new tag, without claiming dsh can't update plugins, since 0.2.2 adds update offers for git installs (unverified for tag changes).
+  - **Release clean install** from the public repo, with git credentials hidden as in Phase 4. It passed on 0.2.0-rc.2 with `github:AmmarByFar/dsh-trustedrouter#v0.1.1`, and on 0.2.2-rc.1 with `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.1`, the README's UI spec. The only warning was the expected peer warning.
+  - **The dist-tag matrix ran manually** ([run 43779079771](https://github.com/AmmarByFar/dsh-trustedrouter/actions/runs/43779079771)) and passed on `latest`, `alpha` and `next`.
 
 ### Phase 5: migrate the maintainer's machine. After Phase 4.5 (ask first: it edits the live profile).
 
