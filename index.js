@@ -53,7 +53,7 @@ export const Provider = z.object({
   preferred_max_latency: percentiles,
   preferred_min_throughput: percentiles,
   zdr: z.boolean(),
-  min_privacy: z.union(['any', 'no_store', 'zdr', 'confidential', 'e2e', 'e2ee']),
+  min_privacy: z.union(['any', 'no_store', 'zdr', 'confidential', 'trusted', 'e2e', 'e2ee']),
   data_collection: z.union(['allow', 'deny']),
   usage: z.union(['credits', 'byok', 'prepaid', 'bring-your-own-key']),
   jurisdiction: z.string(),

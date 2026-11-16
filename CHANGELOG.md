@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.2 (2026-11-15)
+
+- Adds the **Trusted** privacy floor (`min_privacy: trusted`), which TrustedRouter added for its tier-4 endpoints. Trusted means Confidential, limited to the operators TrustedRouter selects, currently Tinfoil and Privatemode. 0.1.1 refused to save `trusted` and labelled those providers Confidential. Confidential still accepts them.
+- README: a privacy floor can leave only providers with a smaller context window than the model's listed one, and TrustedRouter then refuses requests with large max tokens. Also covers what TrustedRouter's confidential-only base URL requires.
+- Tested on dsh 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1 and 0.2.2-alpha.3, with Node 24.
+
 ## 0.1.1 (2026-11-15)
 
 - Fixes the Models page with TrustedRouter's current API. TrustedRouter's model list now leaves out each model's providers unless asked for them. With 0.1.0 that disabled every privacy floor above Any and warned that every model's requests would be refused. The section now fetches `<base URL>/models?include=endpoints`. Requests weren't affected: the saved policy was still sent.

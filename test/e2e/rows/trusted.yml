@@ -1,0 +1,11 @@
+# The Trusted level (TrustedRouter's tier 4) loads and is sent as set.
+# expect-provider: {"min_privacy":"trusted"}
+- insert:
+    - id: trustedrouter
+      name: __REPO__/index.js
+      config:
+        gateways: [__MOCK_BASE__]
+        defaults: { min_privacy: zdr }
+        models:
+          mock-model: { min_privacy: trusted }
+        log: true

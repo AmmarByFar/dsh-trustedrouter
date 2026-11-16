@@ -280,6 +280,12 @@ describe('Config', () => {
     assert.deepEqual(resolve({ defaults: provider }).defaults, provider)
   })
 
+  it('accepts every privacy level TrustedRouter lists, including trusted', () => {
+    for (const level of ['any', 'no_store', 'zdr', 'confidential', 'trusted', 'e2e', 'e2ee']) {
+      assert.deepEqual(resolve({ models: { m: { min_privacy: level } } }).models, { m: { min_privacy: level } })
+    }
+  })
+
   it('passes unknown provider keys through for TrustedRouter to judge', () => {
     assert.deepEqual(resolve({ models: { m: { min_privacy: 'zdr', future_option: 1 } } }).models, { m: { min_privacy: 'zdr', future_option: 1 } })
   })

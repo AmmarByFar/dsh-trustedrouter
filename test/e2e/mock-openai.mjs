@@ -13,13 +13,14 @@ const endpoint = (provider, name, tier, label, usage, country) => ({
   provider_headquarters_country: country, provider_us_based: country === 'US',
 })
 const endpoints = [
-  endpoint('tinfoil', 'Tinfoil', 3, 'Confidential + E2EE + ZDR', 'Credits', 'US'),
+  endpoint('tinfoil', 'Tinfoil', 4, 'Trusted', 'Credits', 'US'),
+  endpoint('chutes', 'Chutes', 3, 'Confidential + E2EE + ZDR', 'Credits', 'US'),
   endpoint('nebius', 'Nebius', 2, 'Zero retention', 'Credits', 'NL'),
   endpoint('deepinfra', 'DeepInfra', 1, 'No-store', 'Credits', 'US'),
   endpoint('novita', 'Novita', 0, 'Standard', 'BYOK', 'US'),
 ]
 // Without endpoints, a model carries only its default route's fields.
-const route = { provider: 'tinfoil', privacy_tier: 3, privacy_tier_label: 'Confidential + E2EE + ZDR' }
+const route = { provider: 'tinfoil', privacy_tier: 4, privacy_tier_label: 'Trusted' }
 const models = withEndpoints => JSON.stringify({
   data: [{ id: 'mock-model', trustedrouter: withEndpoints ? { ...route, endpoints } : route }],
 })

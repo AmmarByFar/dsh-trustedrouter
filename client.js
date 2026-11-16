@@ -35,8 +35,12 @@ window.__ModuleLoader__.load({
     const ROUTES_NS = 'llm-pi-ai'
     const ROW_KEY = 'dsh-trustedrouter#trustedrouter'
 
-    /** `min_privacy` values by the endpoint `privacy_tier` that meets them. */
-    const LEVELS = ['any', 'no_store', 'zdr', 'confidential']
+    /**
+     * `min_privacy` values by the endpoint `privacy_tier` that meets them. An
+     * endpoint meets its own tier's level and every level below it: a tier-4
+     * (Trusted) endpoint also counts for `confidential`.
+     */
+    const LEVELS = ['any', 'no_store', 'zdr', 'confidential', 'trusted']
     const LEVEL_ALIASES = { e2e: 'confidential', e2ee: 'confidential' }
     const SORTS = ['price', 'latency', 'throughput']
     const USAGES = ['credits', 'byok']
@@ -188,6 +192,15 @@ window.__ModuleLoader__.load({
       return LEVELS.map((level, tier) => ({
         level,
         providers: candidates === undefined ? undefined : providersOf(candidates.filter(endpoint => endpoint.tier >= tier)),
+      }))
+    }
+
+    /** `only`/`ignore` suggestions: each of a model's providers, labelled with the level its best tier meets. */
+    function providerSuggestions(t, entry) {
+      if (entry === undefined) return []
+      return providersOf(entry.endpoints).map(provider => ({
+        value: provider.provider,
+        label: `${provider.name} · ${levelLabel(t, LEVELS[Math.max(0, Math.min(provider.tier, LEVELS.length - 1))])}`,
       }))
     }
 
@@ -542,9 +555,7 @@ window.__ModuleLoader__.load({
       const ops = modelOps(model, saved, draft, inherited)
       const choices = levelChoices(entry, { ...effective, min_privacy: undefined })
       const qualifying = qualifyingProviders(entry, effective)
-      const suggestions = entry === undefined
-        ? []
-        : providersOf(entry.endpoints).map(provider => ({ value: provider.provider, label: `${provider.name} · ${levelLabel(t, LEVELS[Math.min(provider.tier, 3)])}` }))
+      const suggestions = providerSuggestions(t, entry)
       const sortValue = isPlainObject(draft.sort) ? JSON.stringify(draft.sort) : draft.sort
       const inheritedUs = typeof defaults.jurisdiction === 'string' && defaults.jurisdiction.toLowerCase() === 'us'
       const otherJurisdiction = typeof draft.jurisdiction === 'string' && draft.jurisdiction !== '' && draft.jurisdiction.toLowerCase() !== 'us'
@@ -1032,6 +1043,7 @@ window.__ModuleLoader__.load({
       'level.no_store': 'No-store',
       'level.zdr': 'Zero retention',
       'level.confidential': 'Confidential + E2EE + ZDR',
+      'level.trusted': 'Trusted (Confidential, selected operators)',
       'level.with': '{level} — {providers}',
       'level.none': '{level} — no provider',
       'providers.more': '{names} +{count}',
@@ -1155,7 +1167,7 @@ window.__ModuleLoader__.load({
       apply,
       // Pure helpers, exported like the host half's for the unit tests.
       EN, LEVELS, mergeBody, providerFor, overrideKey, routeCovered, slugList, levelOf, indexCatalog,
-      catalogEntry, levelChoices, qualifyingProviders, modelOps, pageOps, providerProblem, routeModels, valueAt, createCatalogs, catalogURL,
+      catalogEntry, levelChoices, qualifyingProviders, providerSuggestions, modelOps, pageOps, providerProblem, routeModels, valueAt, createCatalogs, catalogURL,
     }
   },
 })

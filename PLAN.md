@@ -2,9 +2,9 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-11-15):** Phases 0 to 5 are done; the maintainer migrated their laptop to v0.1.1 themselves. **v0.1.1 is released** ([release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.1)), and the repo is public. v0.1.1 fixes the Models page's privacy-floor choices, which TrustedRouter's 2026-11 model-list change broke in v0.1.0 (requests were unaffected). It has 92 unit tests (27 host, 65 client). CI is on Node 24 and passes on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1 and 0.2.2-alpha.3, plus the `latest`, `alpha` and `next` dist-tags. A clean install from the public tag works, and the UI was checked in a browser on 0.2.2-rc.1 (see [Phase 4.5 results](#phase-45-results-2026-11-15)).
+**Status (2026-11-15):** Phases 0 to 5 are done; the maintainer migrated their laptop to v0.1.1 themselves. **Phase 6 (v0.1.2, the `trusted` level) is built and verified locally, and committed but not pushed** (see [Phase 6 results](#phase-6-results-2026-11-15)): 97 unit tests (28 host, 69 client), e2e on five dsh versions, a browser check and keyed API checks. **v0.1.1 is the latest release** ([release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.1)), and the repo is public. v0.1.1 fixes the Models page's privacy-floor choices, which TrustedRouter's 2026-11 model-list change broke in v0.1.0 (requests were unaffected). It has 92 unit tests (27 host, 65 client). CI is on Node 24 and passes on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1 and 0.2.2-alpha.3, plus the `latest`, `alpha` and `next` dist-tags. A clean install from the public tag works, and the UI was checked in a browser on 0.2.2-rc.1 (see [Phase 4.5 results](#phase-45-results-2026-11-15)).
 
-**Next:** [Phase 6](#phase-6-v012-trusted-level-and-context-window-note-proposed-ask-first) (v0.1.2): a `trusted` privacy level for TrustedRouter's new tier 4, plus a README note on context windows. It is proposed but not yet approved, so ask first. agent-server's own dsh profile still has v0.1.0; ask before upgrading it.
+**Next:** release v0.1.2, after asking. That means pushing `main` and waiting for CI, tagging `v0.1.2`, creating the GitHub release from the CHANGELOG entry, and running `clean-install.sh` from the tag (as in Phase 4.5). agent-server's own dsh profile still has v0.1.0; ask before upgrading it.
 
 ## Background: why a plugin
 
@@ -84,7 +84,7 @@ Config is a `@deepseek-ai/schemastery` schema. Every field is `.volatile()`, so 
 **Out of the box nothing changes.** The bundle row has no config, so the schema defaults apply: the TrustedRouter gateway, but no `defaults` and no `models`. Installing the plugin never starts producing 400s by itself; the user picks the policy.
 
 **Schema (`Provider`).**
-- The documented `provider` fields are type-checked, so a bad value fails at save time. Strict enums: `min_privacy` (with aliases `e2e` and `e2ee`), `sort`, `data_collection` and `usage` (with its aliases). `jurisdiction` is a free string so new jurisdictions need no update.
+- The documented `provider` fields are type-checked, so a bad value fails at save time. Strict enums: `min_privacy` (`any|no_store|zdr|confidential|trusted`, with aliases `e2e` and `e2ee`; TrustedRouter's own error message lists the same set), `sort`, `data_collection` and `usage` (with its aliases). `jurisdiction` is a free string so new jurisdictions need no update.
 - **Unknown keys pass through.** schemastery's `object` keeps unknown keys and can't declaratively reject them. That's safe because TrustedRouter's docs say unknown options return 400: a misspelled key fails loudly at TrustedRouter instead of vanishing.
 - **Gotcha:** schemastery fills a missing nested `object` field with `{}`. `max_price` therefore uses `.default(undefined)`; without it every request carried `max_price: {}`. Fields declared as unions (`sort`, the percentile fields, the lists) aren't filled in.
 - URLs (`gateways`, `rules[].baseURL`) must match `^https?://host[/path]`, with no query or fragment. A URL that passes but that `new URL` still rejects matches nothing; it never refuses other traffic.
@@ -166,8 +166,8 @@ One `window.__ModuleLoader__.load({ id: 'dsh-trustedrouter', factory })` script.
    - The reply is about 4.5 MB (669 models) with `Cache-Control: public, max-age=60, stale-if-error=300`. It is indexed to `{ provider, name, tier, usage, country, usBased }` per endpoint.
    - **A model without an endpoint list isn't indexed**, so it reads as unknown (every level offered, with a note) rather than as served by no provider (every level disabled and a refusal warning). An explicit `endpoints: []` still means no provider.
    - dsh web pages set no Content-Security-Policy, so `connect-src` doesn't block the fetch. The Electron desktop app is out of scope (`platform: "web"`).
-   - Endpoint fields used: `provider`, `provider_name`, `privacy_tier`, `usage_type` (Credits/BYOK), `provider_headquarters_country` and `provider_us_based`. Tiers: 0 Standard, 1 No-store, 2 Zero retention, 3 Confidential + E2EE + ZDR, and since at least 2026-11-15, 4 Trusted (Tinfoil and Privatemode only). Tier 4 counts toward `confidential`; v0.1.1 has no `trusted` level yet ([Phase 6](#phase-6-v012-trusted-level-and-context-window-note-proposed-ask-first)).
-   - **Mapping to `min_privacy`: 1 → `no_store`, 2 → `zdr`, 3 → `confidential` (confirmed 2026-10-07 with keyed requests).**
+   - Endpoint fields used: `provider`, `provider_name`, `privacy_tier`, `usage_type` (Credits/BYOK), `provider_headquarters_country` and `provider_us_based`. Tiers: 0 Standard, 1 No-store, 2 Zero retention, 3 Confidential + E2EE + ZDR, and since at least 2026-11-15, 4 Trusted (Tinfoil and Privatemode only). Tier 4 counts toward `confidential`. `trusted` (from v0.1.2) admits tier 4 only. A provider's label is its best tier's level, clamped to the known levels (`providerSuggestions`).
+   - **Mapping to `min_privacy`: 1 → `no_store`, 2 → `zdr`, 3 → `confidential` (confirmed 2026-10-07 with keyed requests), 4 → `trusted` (confirmed 2026-11-15; see [Phase 6 results](#phase-6-results-2026-11-15)).** Each floor admits its own tier and every tier above it.
      - On `deepseek/deepseek-v4.1-flash`, `only` pinned one provider per tier: novita (0), deepinfra (1), nebius (2) and tinfoil (3).
      - Each provider was served at its own tier's floor and refused (400) one level up. `any` served novita, and `e2ee` served tinfoil like `confidential`.
      - `anthropic/claude-haiku-4.5` (Standard only) with `confidential` was refused.
@@ -484,9 +484,9 @@ The maintainer did the migration themselves, on the laptop, and reported it work
 - Install the release into the real `web` profile and move settings into the new `trustedrouter` row.
 - Remove the prototype's `extra-body` insert row and `~/dsh-extra-body` only after verifying (see `CLAUDE.local.md`).
 
-### Phase 6: v0.1.2, Trusted level and context-window note. Proposed (ask first).
+### Phase 6: v0.1.2, Trusted level and context-window note. BUILT 2026-11-15; release pending (ask first). See results below.
 
-The maintainer raised both points on 2026-11-15 after the v0.1.1 release. They were checked that day against the live model list and TrustedRouter's docs.
+The maintainer raised both points on 2026-11-15 after the v0.1.1 release, and approved the work the same day. They were checked that day against the live model list and TrustedRouter's docs.
 
 #### Findings (2026-11-15)
 
@@ -529,6 +529,51 @@ The maintainer raised both points on 2026-11-15 after the v0.1.1 release. They w
    - Optionally, an editor hint when the floor excludes the model's default-route provider: the context figures are that provider's.
 5. **Keyed check** of `trusted`, with a disposable key from the maintainer (never written to a file).
 6. **Usual release checks:** `npm test`, e2e and clean installs, a browser check, then bump to 0.1.2 with a CHANGELOG entry. Ask before pushing, tagging and releasing.
+
+#### Phase 6 results (2026-11-15)
+
+Work ran on agent-server, with Node 24.22.3. Steps 1 to 6 are done except the release; the optional editor hint (step 4) was left out.
+
+- **Keyed checks** used a disposable key from the maintainer, sent only as a request header and never written to a file. Each was a direct POST to `/v1/chat/completions` with `max_tokens: 5` unless noted.
+  - `min_privacy: "bogus"` returns 400 `provider.min_privacy must be one of: any, no_store, zdr, confidential, trusted (aliases: e2e, e2ee)`. That's the server's own list.
+  - `trusted` on `deepseek/deepseek-v4.1-flash` (Tinfoil at tier 4): 200. `Trusted` (capitalised) is accepted too; the plugin keeps lowercase only.
+  - `trusted` on `deepseek/deepseek-v3.2` (Chutes at tier 3 only): 400 `No route candidates match the requested provider filters`. `confidential` on the same model: 200.
+  - `z-ai/glm-5.3-flash` (NEAR AI at tier 3, Privatemode at tier 4):
+    - `trusted` went to Privatemode, which refused with 401 (`Privatemode attestation manifest changed; encrypted inference refused pending review`), with no fallback to NEAR AI;
+    - `trusted` + `only: [near-ai]`: 400 (filters narrow, never widen);
+    - `confidential` + `only: [near-ai]` reached NEAR AI (an upstream 502).
+  - **Context:** `moonshotai/kimi-k3.1-pro` under `confidential` with `max_tokens` 943718 returns 400 `This model's maximum context length is 262144 tokens. However, you requested 943723 tokens (5 in the messages, 943718 in the completion)…`. Under `confidential` with 200000, and with no floor at 943718, both returned 200. These two weren't capped at 5 tokens, so they cost a little more than the rest.
+  - **Where 943718 comes from:** dsh's llm-pi-ai discovery (`packages/llm/llm-pi-ai/src/discovery.ts`, the `maxTokens` capacity) falls back to `top_provider.max_completion_tokens`. Adopting a model from the list copies the default provider's limits into its entry.
+  - **Confidential-only host** (`api.confidential.trustedrouter.com/v1`):
+    - no `provider`, `e2ee` and `trusted` each return 400 `confidential_privacy_required` (`This hostname requires provider.min_privacy="confidential"`);
+    - `confidential` returns 200.
+- **Host:** `min_privacy` accepts `trusted`.
+- **Client:**
+  - `LEVELS` ends with `trusted`, so the index is the tier, and EN has `level.trusted`: "Trusted (Confidential, selected operators)".
+  - The `only`/`ignore` suggestions moved into `providerSuggestions`, which labels each provider with its best tier's level, clamped to 0 to 4, instead of capping at Confidential.
+- **Mock:** Tinfoil is tier 4 ("Trusted"), and a new Chutes endpoint is tier 3.
+- **e2e:** new row `test/e2e/rows/trusted.yml` (`# expect-provider: {"min_privacy":"trusted"}`).
+- **Unit tests:** 97 (28 host, 69 client). New:
+  - the host accepts every listed level;
+  - `trusted` filters (tier 4 meets Confidential, tier 3 doesn't meet Trusted);
+  - `levelOf('Trusted')` is undefined;
+  - suggestion labels, including out-of-range tiers;
+  - parity samples for `trusted` and `Trusted`.
+  
+  Mutation-checked: dropping `trusted` from the client fails 8, from the host 2; the old cap at tier 3 fails 1, and removing the clamp below 0 fails 1.
+- **e2e:** `run-all.sh` (now five runs) plus `clean-install.sh` passed on Node 24 on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1, 0.2.2-alpha.3 and `next` (0.2.2-rc.3). The packed 0.1.2 was re-checked on rc.2 and alpha.1 after the bump. Pushed CI isn't run yet; the previous push, `37dcdbe` ([run 43803688946](https://github.com/AmmarByFar/dsh-trustedrouter/actions/runs/43803688946)), passed.
+- **Browser check:** Claude in Chrome on agent-server, against a scratch `dsh web` 0.2.2-rc.1.
+  - `z-ai/glm-5.3`'s floor offers "Trusted (Confidential, selected operators) — Tinfoil, Privatemode", and both providers' suggestions read Trusted.
+  - On the mock card, Confidential is "Tinfoil, Chutes" and Trusted is "Tinfoil".
+  - Applying Trusted wrote `min_privacy: trusted` to the patch, and the host logged the policy live. A chat's two POSTs to the mock carried `{"min_privacy":"trusted"}`.
+  - The Plugins page offers Trusted; saving it as the default reached the host (`defaults {"min_privacy":"trusted"}`).
+  - A reload showed no console messages.
+- **README:**
+  - The privacy-floor row adds `trusted`.
+  - A "few things to know" bullet covers context windows under a floor, with the 400 text and the fix (lower **Max output tokens** and **Context window**, dsh's labels).
+  - The Gateways bullet covers the confidential-only base URL.
+  - Install specs are `#v0.1.2`.
+- **CHANGELOG:** a dated 0.1.2 entry. `package.json` is 0.1.2.
 
 ### Later (v2+)
 

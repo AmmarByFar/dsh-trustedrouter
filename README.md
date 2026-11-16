@@ -25,13 +25,13 @@ TrustedRouter reads routing and privacy policy only from the request body, for e
 **From the dsh web UI:**
 
 1. Sidebar → **Plugins** → **Add plugin**.
-2. Enter `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.1` and choose **Install**.
+2. Enter `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.2` and choose **Install**.
 3. Choose **Enable now**. No reload or restart is needed.
 
 **From the command line**, for the `web` profile that `dsh web` uses:
 
 ```sh
-dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.1
+dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.2
 ```
 
 Then restart `dsh web` if it was running.
@@ -59,7 +59,7 @@ Each of the provider's models is listed with the policy it gets. Its tag says wh
 
 | Setting | Sends | Notes |
 |---|---|---|
-| Privacy floor | `min_privacy`: `no_store`, `zdr` or `confidential` | Each level lists the providers that meet it for this model. TrustedRouter refuses the request rather than use a provider below the floor. |
+| Privacy floor | `min_privacy`: `no_store`, `zdr`, `confidential` or `trusted` | Each level lists the providers that meet it for this model. TrustedRouter refuses the request rather than use a provider below the floor. **Trusted** is Confidential limited to the operators TrustedRouter selects, currently Tinfoil and Privatemode. |
 | Prefer | `sort`: `price`, `latency` or `throughput` | |
 | Only these providers | `only` | Empty allows every provider. |
 | Never these providers | `ignore` | |
@@ -74,6 +74,10 @@ A few things to know:
 - The section appears only on saved providers whose base URL is under a configured gateway. By default that's `https://api.trustedrouter.com/v1`.
 - You can only change settings from a browser on the same machine as dsh. That's a dsh rule for all settings.
 - To list providers per model, your browser fetches TrustedRouter's public model list (`<base URL>/models?include=endpoints`, no API key sent) the first time you open the section. If that fails, every privacy level is offered.
+- **A floor can leave only providers with a smaller context window.** TrustedRouter's model list gives one context window and max output per model, from its default provider, and dsh copies them when you add a model from that list. A floor that rules the default provider out can leave less room.
+  - Example: TrustedRouter lists `moonshotai/kimi-k3.1-pro` at 1,048,576 tokens, with a max output of 943,718. Under Confidential only Tinfoil serves it, with 262,144.
+  - Any request whose prompt plus max output exceeds that window is refused with a 400: `This model's maximum context length is 262144 tokens. However, you requested … tokens`.
+  - The fix is to lower the model's **Max output tokens**, and its **Context window**, on the same card. The model list doesn't give each provider's window, so the plugin can't warn you.
 
 ### Defaults and advanced settings: the Plugins page
 
@@ -82,6 +86,7 @@ Sidebar → **Plugins** → **TrustedRouter privacy** (under Installed), then th
 ![The TrustedRouter privacy page under Plugins](docs/plugins-page.png)
 
 - **Gateways:** the base URLs the policy applies to, one per line. Add the EU gateway, `https://api-europe-west4.quillrouter.com/v1`, if you use it.
+  - For TrustedRouter's confidential-only base URL, `https://api.confidential.trustedrouter.com/v1`, add it here and set the privacy floor to exactly **Confidential**. That URL refuses any request whose `min_privacy` is anything else, including `trusted` and the `e2ee` alias. For Trusted, use the ordinary base URL.
 - **Defaults for every model:** the same settings as a model has. A model's own settings override them field by field.
 - **Advanced defaults:**
   - preferred provider order (`order`);

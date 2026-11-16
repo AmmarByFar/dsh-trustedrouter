@@ -1,6 +1,6 @@
 {
   "name": "dsh-trustedrouter",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "TrustedRouter privacy and routing settings per model for DeepSeek Harness (dsh)",
   "keywords": ["dsh-plugin", "deepseek-harness", "trustedrouter"],
   "license": "MIT",

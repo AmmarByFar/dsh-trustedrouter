@@ -49,9 +49,9 @@ const catalog = client.indexCatalog({
           endpoint('zai', 0, { provider_headquarters_country: 'SG', provider_us_based: false }),
           endpoint('deepinfra', 1),
           endpoint('nebius', 2, { provider_headquarters_country: 'NL', provider_us_based: false }),
-          endpoint('tinfoil', 3),
+          endpoint('tinfoil', 4),
           endpoint('privatemode', 3, { provider_headquarters_country: 'DE', provider_us_based: false }),
-          endpoint('tinfoil', 3, { usage_type: 'BYOK' }),
+          endpoint('tinfoil', 4, { usage_type: 'BYOK' }),
         ],
       },
     },
@@ -163,17 +163,20 @@ describe('levelChoices', () => {
       ['no_store', ['deepinfra', 'nebius', 'tinfoil', 'privatemode']],
       ['zdr', ['nebius', 'tinfoil', 'privatemode']],
       ['confidential', ['tinfoil', 'privatemode']],
+      ['trusted', ['tinfoil']],
     ])
   })
   it('applies only, ignore, usage and jurisdiction', () => {
-    assert.deepEqual(names({ only: 'tinfoil, nebius', ignore: ['nebius'] }).map(([, p]) => p), [['tinfoil'], ['tinfoil'], ['tinfoil'], ['tinfoil']])
-    assert.deepEqual(names({ usage: 'byok' }).map(([, p]) => p), [['tinfoil'], ['tinfoil'], ['tinfoil'], ['tinfoil']])
-    assert.deepEqual(names({ usage: 'bring-your-own-key' }).map(([, p]) => p), [['tinfoil'], ['tinfoil'], ['tinfoil'], ['tinfoil']])
-    assert.deepEqual(names({ jurisdiction: 'US' }).at(-1), ['confidential', ['tinfoil']])
+    const tinfoil = [['tinfoil'], ['tinfoil'], ['tinfoil'], ['tinfoil'], ['tinfoil']]
+    assert.deepEqual(names({ only: 'tinfoil, nebius', ignore: ['nebius'] }).map(([, p]) => p), tinfoil)
+    assert.deepEqual(names({ usage: 'byok' }).map(([, p]) => p), tinfoil)
+    assert.deepEqual(names({ usage: 'bring-your-own-key' }).map(([, p]) => p), tinfoil)
+    assert.deepEqual(names({ jurisdiction: 'US' }).slice(3), [['confidential', ['tinfoil']], ['trusted', ['tinfoil']]])
     assert.deepEqual(names({ jurisdiction: 'nl' }).at(2), ['zdr', ['nebius']])
+    assert.deepEqual(names({ jurisdiction: 'de' }).slice(3), [['confidential', ['privatemode']], ['trusted', []]])
   })
   it('rules nothing out for a model the catalog does not know', () => {
-    assert.deepEqual(plain(client.levelChoices(undefined, {})).map(choice => choice.providers), [undefined, undefined, undefined, undefined])
+    assert.deepEqual(plain(client.levelChoices(undefined, {})).map(choice => choice.providers), [undefined, undefined, undefined, undefined, undefined])
   })
   it('counts the providers that qualify under the floor and filters', () => {
     const qualifying = provider => plain(client.qualifyingProviders(entry, provider)).map(p => p.provider)
@@ -182,9 +185,26 @@ describe('levelChoices', () => {
     assert.deepEqual(qualifying({ min_privacy: 'confidential', only: ['zai'] }), [])
     assert.equal(client.qualifyingProviders(undefined, {}), undefined)
   })
+  it('lets a Trusted (tier 4) endpoint meet Confidential, but not a tier-3 one meet Trusted', () => {
+    const qualifying = provider => plain(client.qualifyingProviders(entry, provider)).map(p => p.provider)
+    assert.deepEqual(qualifying({ min_privacy: 'confidential', only: ['tinfoil'] }), ['tinfoil'])
+    assert.deepEqual(qualifying({ min_privacy: 'trusted' }), ['tinfoil'])
+    assert.deepEqual(qualifying({ min_privacy: 'trusted', only: ['privatemode'] }), [])
+  })
   it('maps aliases to their levels', () => {
-    assert.deepEqual(['any', 'no_store', 'zdr', 'confidential', 'e2e', 'e2ee', 'bogus', undefined].map(client.levelOf),
-      ['any', 'no_store', 'zdr', 'confidential', 'confidential', 'confidential', undefined, undefined])
+    assert.deepEqual(['any', 'no_store', 'zdr', 'confidential', 'trusted', 'e2e', 'e2ee', 'Trusted', 'bogus', undefined].map(client.levelOf),
+      ['any', 'no_store', 'zdr', 'confidential', 'trusted', 'confidential', 'confidential', undefined, undefined, undefined])
+  })
+  it('labels each suggested provider with the level its best tier meets', () => {
+    const t = key => client.EN[key]
+    assert.deepEqual(plain(client.providerSuggestions(t, entry)).map(s => s.label), [
+      'Zai · Any provider', 'Deepinfra · No-store', 'Nebius · Zero retention',
+      'Tinfoil · Trusted (Confidential, selected operators)', 'Privatemode · Confidential + E2EE + ZDR',
+    ])
+    const odd = client.indexCatalog({ data: [{ id: 'm', trustedrouter: { endpoints: [{ provider: 'future', privacy_tier: 9 }, { provider: 'odd', privacy_tier: -1 }] } }] }).get('m')
+    assert.deepEqual(plain(client.providerSuggestions(t, odd)).map(s => s.label),
+      ['future · Trusted (Confidential, selected operators)', 'odd · Any provider'])
+    assert.deepEqual(plain(client.providerSuggestions(t, undefined)), [])
   })
 })
 
@@ -274,7 +294,7 @@ describe('pageOps', () => {
     const errors = edits => plain(client.pageOps(settings, edits).errors)
     assert.deepEqual(errors({ models: '{' }), { models: ['page.invalidJSON'] })
     assert.deepEqual(errors({ models: '[]' }), { models: ['page.invalidModels'] })
-    assert.deepEqual(errors({ models: '{"m": {"min_privacy": "bogus"}}' }).models[1], { where: 'm', field: 'min_privacy', expected: 'one of any, no_store, zdr, confidential' })
+    assert.deepEqual(errors({ models: '{"m": {"min_privacy": "bogus"}}' }).models[1], { where: 'm', field: 'min_privacy', expected: 'one of any, no_store, zdr, confidential, trusted' })
     assert.deepEqual(errors({ rules: '[{"baseURL": "https://a.example/v1"}]' }), { rules: ['page.invalidRule', { index: 1 }] })
     assert.deepEqual(errors({ models: '{"m": {"min_privacy": "e2ee", "sort": {"by": "price", "partition": "none"}, "custom_option": 1}}' }), {})
   })
@@ -288,7 +308,7 @@ describe('pageOps', () => {
 
 describe('providerProblem agrees with the host schema', () => {
   const samples = [
-    { min_privacy: 'confidential' }, { min_privacy: 'e2e' }, { min_privacy: 'nope' },
+    { min_privacy: 'confidential' }, { min_privacy: 'trusted' }, { min_privacy: 'Trusted' }, { min_privacy: 'e2e' }, { min_privacy: 'nope' },
     { usage: 'prepaid' }, { usage: 'free' }, { sort: 'latency' }, { sort: 'cheapest' },
     { sort: { by: 'price', partition: 'model' } }, { sort: { by: 'price', partition: 'all' } },
     { only: 'a,b' }, { only: ['a', 1] }, { allow_fallbacks: 'yes' }, { data_collection: 'deny' },
@@ -358,7 +378,7 @@ describe('createCatalogs', () => {
     }
     const withEndpoints = await load(client.catalogURL(base))
     assert.equal(withEndpoints.status, 'ready')
-    assert.deepEqual(plain(withEndpoints.models.get('mock-model').endpoints.map(e => e.provider)), ['tinfoil', 'nebius', 'deepinfra', 'novita'])
+    assert.deepEqual(plain(withEndpoints.models.get('mock-model').endpoints.map(e => e.provider)), ['tinfoil', 'chutes', 'nebius', 'deepinfra', 'novita'])
     // The plain list reads as unknown models, as the live API's does.
     const without = await load(`${base}/models`)
     assert.equal(without.status, 'ready')
