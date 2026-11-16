@@ -2,7 +2,15 @@
 
 A community [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (dsh) plugin that lets users choose [TrustedRouter](https://trustedrouter.com/docs/provider-routing) privacy and routing options **per model** from the dsh web UI. Anyone can install it from GitHub.
 
-**Status (2026-10-07):** Phases 0 to 4 done: **v0.1.0 is released** and the repo is public ([release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.0)). The host half (`index.js`) and the client half (`client.js`) are built. 89 unit tests pass (27 host, 62 client), the headless e2e suite passes, a clean install from GitHub works, and the UI was checked in a browser, all on dsh 0.2.0-rc.2 and 0.2.1-alpha.1. README, LICENSE, CHANGELOG and the CI workflow are written, and CI passes on GitHub (see [Phase 3 results](#phase-3-results-2026-10-07) and [Phase 4 results](#phase-4-results-2026-10-07)). **Next step is Phase 5 (migrate the maintainer's machine), which edits the live profile, so ask first.** All decisions are confirmed.
+**Status (2026-11-15):** Phases 0 to 4 are done: **v0.1.0 is released** and the repo is public ([release](https://github.com/AmmarByFar/dsh-trustedrouter/releases/tag/v0.1.0)). A 2026-11-15 upstream check found that TrustedRouter's model list no longer includes provider endpoints by default, which broke the Models page's privacy-floor choices in v0.1.0 (requests were unaffected). **Phase 4.5 (v0.1.1) is done locally except the release** ([results](#phase-45-results-2026-11-15)):
+- the client fetches `?include=endpoints`;
+- CI is on Node 24 with a refreshed matrix;
+- 92 unit tests pass (27 host, 65 client);
+- e2e and the clean install pass on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1, 0.2.2-alpha.3 and `next`;
+- the UI was checked in a browser on 0.2.2-rc.1;
+- the version is 0.1.1, and the work is committed but **not pushed or tagged**.
+
+**Next:** push, tag and release `v0.1.1`, asking first (see the results' "Left" list). Then Phase 5 (migrate the maintainer's machine), which edits the live profile, so ask first. All decisions are confirmed.
 
 ## Background: why a plugin
 
@@ -157,10 +165,12 @@ One `window.__ModuleLoader__.load({ id: 'dsh-trustedrouter', factory })` script.
    - **Both rc.2 and alpha accept both signatures**: `register(ns, locale, dict)` and `register(ns, { en, zh })`. The PLAN's earlier note was wrong, and no feature detection is needed.
    - With only `en` registered, other locales fall back to English.
    - `locale/en.json` holds the Plugins-page title and description (`meta`).
-5. **Model data.** `GET <route baseURL>/models` is fetched once per URL per page load, and only when a section is opened.
+5. **Model data.** `GET <route baseURL>/models?include=endpoints` (`catalogURL`) is fetched once per URL per page load, and only when a section is opened.
+   - **The query is required since about 2026-11.** Plain `/models` (about 1.4 MB) leaves out `trustedrouter.endpoints` and keeps only the default route's fields. v0.1.0 fetched it plain (fixed in v0.1.1; see [Phase 4.5 results](#phase-45-results-2026-11-15)). `test/e2e/mock-openai.mjs` mimics this, and a unit test loads the mock through `catalogURL`.
    - It is public, needs no key, and sends `Access-Control-Allow-Origin: *`. This holds for both `api.trustedrouter.com` and the EU gateway `api-europe-west4.quillrouter.com`.
-   - Keep it a simple GET with no custom headers, because a preflight OPTIONS returns 401.
-   - The reply is about 4.2 MB with `Cache-Control: public, max-age=60`. It is indexed to `{ provider, name, tier, usage, country, usBased }` per endpoint.
+   - Keep it a simple GET with no custom headers. A preflight OPTIONS returned 401 until 2026-11; it now returns 204, but don't rely on that.
+   - The reply is about 4.5 MB (669 models) with `Cache-Control: public, max-age=60, stale-if-error=300`. It is indexed to `{ provider, name, tier, usage, country, usBased }` per endpoint.
+   - **A model without an endpoint list isn't indexed**, so it reads as unknown (every level offered, with a note) rather than as served by no provider (every level disabled and a refusal warning). An explicit `endpoints: []` still means no provider.
    - dsh web pages set no Content-Security-Policy, so `connect-src` doesn't block the fetch. The Electron desktop app is out of scope (`platform: "web"`).
    - Endpoint fields used: `provider`, `provider_name`, `privacy_tier`, `usage_type` (Credits/BYOK), `provider_headquarters_country` and `provider_us_based`. Tiers: 0 Standard, 1 No-store, 2 Zero retention, 3 Confidential + E2EE + ZDR.
    - **Mapping to `min_privacy`: 1 → `no_store`, 2 → `zdr`, 3 → `confidential` (confirmed 2026-10-07 with keyed requests).**
@@ -398,7 +408,82 @@ Steps:
   - The dsh GitHub Discussion. Posting on another project needs the maintainer's go-ahead.
   - The dist-tag matrix hasn't run yet. The first scheduled run is Monday; `gh workflow run test.yml` runs it now.
 
-### Phase 5: migrate the maintainer's machine. NEXT (ask first: it edits the live profile).
+### Phase 4.5: v0.1.1 maintenance. DONE 2026-11-15 except the release; see results below.
+
+#### Upstream check (2026-11-15)
+
+A check for TrustedRouter and dsh changes since v0.1.0 found:
+
+- **Broken: TrustedRouter's `GET /v1/models` no longer includes `trustedrouter.endpoints` by default.** The reply shrank from about 4.2 MB to 1.4 MB (669 models). Model entries still carry route-level fields (`privacy_tier`, `provider`, …) but no per-provider list.
+  - Effect (corrected during the fix): v0.1.0's `indexCatalog` indexed every model with `endpoints: []`, so each read as **served by no provider**, not as unknown. Every floor above Any was labelled "— no provider" and disabled, every editor warned that the model's requests would be refused, and the `only`/`ignore` datalists were empty. Requests were unaffected. (Checked by running v0.1.0's `client.js` against the live reply.)
+  - **Fix: fetch `<baseURL>/models?include=endpoints`.** Verified on both `api.trustedrouter.com` and `api-europe-west4.quillrouter.com`: 200, about 4.47 MB, `Access-Control-Allow-Origin: *`, `Cache-Control: public, max-age=60, stale-if-error=300`, no key needed. Every field the client uses is present (`provider`, `provider_name`, `privacy_tier`, `usage_type`, `provider_headquarters_country`, `provider_us_based`). Samples: `z-ai/glm-5.3` has 50 endpoints, `deepseek/deepseek-v4.1-flash` 34, `anthropic/claude-haiku-4.5` 2.
+  - A preflight `OPTIONS` now returns 204 (it was 401), but keep the request a simple GET anyway.
+  - Update `test/e2e/mock-openai.mjs` to serve endpoints only with `include=endpoints`, so a test catches a regression, and update Client half §5.
+- **dsh 0.2.2 needs Node ≥ 24.9** (`engines.node`, from 0.2.2-rc.1; 0.2.1-rc.5 and earlier declare none). CI still uses Node 22: the weekly runs pass with an `EBADENGINE` warning. Move both CI jobs to Node 24, and update the README's "Tested with" table (it says Node 22).
+- **New dsh versions.** npm dist-tags on 2026-11-15: `latest` 0.2.2-rc.1, `alpha` 0.2.2-alpha.3, and a new `next` tag at 0.2.2-rc.3. CI's push matrix still pins 0.2.0-rc.2 and 0.2.1-alpha.1, and the weekly matrix doesn't test `next`. Proposed: push matrix 0.2.2-rc.1 and 0.2.2-alpha.3 (or the current pins plus those); weekly matrix `latest`, `alpha` and `next`. Decide whether to keep 0.2.0-rc.2 while the live machine still runs it.
+
+Checked and fine:
+- **Weekly CI:** all five scheduled runs (2026-10-12 to 2026-11-09) passed on `latest` and `alpha`, the last on 0.2.2-rc.1 and 0.2.2-alpha.3.
+- **dsh 0.2.2-rc.3:** `DSH_VERSION=0.2.2-rc.3 test/e2e/run-all.sh` passed locally (control plus three rows) on Node 24.22.3.
+- **pi-ai jumped from 0.87.1 to 1.3.0** (`@earendil-works/pi-ai`, with `openai` 7.19.0). `openai-completions.js` still calls `createClient(...)` per request, passing `options?.fetch`, which dsh leaves undefined, so the SDK still uses the global `fetch`. The dsh adapter's `streamSimple` call still passes no `onPayload` or `fetch` (`lib/index.js` around line 2142 in dsh-llm-pi-ai 0.2.2-rc.3).
+- **Still no native body setting:** `catalog.ts` still marks `openRouterRouting` `withhold`, and llm-pi-ai's config gained only image limits and larger default context and max tokens.
+- **Nothing replaces `globalThis.fetch` in the shipped packages.** The new `util/http-proxy` uses undici's `setGlobalDispatcher`. Only experimental packages wrap `fetch` (inspector, liveshare, webworker-runtime), and the inspector chains to the previous descriptor.
+- **Client contracts:** `ui-settings-models`' `slot-contract.ts` is unchanged. `ui-plugin-manager`'s gained only additions (`availability`, `official`, and the Discover tab's install/update props). `ConfigFormSnapshot` dropped `mode` ('host' | 'memory'); the client never reads it. `client-modules.md` only added a package-asset route and release identity.
+- **TrustedRouter's provider-routing docs** match the `Provider` schema: the same fields, enums and aliases (`usage` aliases `prepaid` and `bring-your-own-key`; `sort.partition` is `model|none`). New, and needing no change since unknown keys pass through: `usage_type`/`billing` as names for `usage`; `country`, `headquarters_country` and `provider_country` for `jurisdiction`; a top-level `allow_fallbacks` (a disagreeing value is a 400); and 501 `not_supported_in_alpha` for `quantizations`, `enforce_distillable_text`, non-token `max_price` units and `sort: "exacto"`. Its `zdr` floor is now documented as strict (it excludes PSP, safety retention and durable prompt caching), which the catalog's tiers already reflect.
+- **New in dsh, optional:** an experimental plugin market (`packages/boot/plugin-market`, off by default; users add index URLs) whose Discover pages read a locale `meta.detail` document or the README, and Plugins-page update offers for git-installed bundles, pinned to a commit. No action needed now.
+
+The `.ref/deepseek-harness` clone was fetched to `39163dd30f` (dsh-v0.2.2-rc.3 sync) for this check.
+
+#### Steps
+
+1. `client.js`: fetch `?include=endpoints`. Add a unit test for the URL, make the mock require the query, and update Client half §5.
+2. CI: Node 24 in both jobs; refresh the version matrices as above.
+3. Re-run `npm test`, `test/e2e/run-all.sh` on the new versions, `clean-install.sh`, and a browser check that the floor options name providers again.
+4. Bump to 0.1.1, update the README ("Tested with", Requirements) and the CHANGELOG, then ask before tagging and releasing `v0.1.1`.
+
+#### Phase 4.5 results (2026-11-15)
+
+Approved by the maintainer on 2026-11-15, along with the CI matrix: keep the old pins and add the 0.2.2 ones. Work ran on `agent-server`, with Node 24.22.3.
+
+- **`client.js`:**
+  - `catalogURL` returns `<baseURL>/models?include=endpoints`, and is exported for tests.
+  - `indexCatalog` skips a model with no `trustedrouter.endpoints` array (Client half §5).
+  - `catalog.unknownModel` now reads "TrustedRouter's model list gives no provider details for this model…", which fits both cases.
+- **Mock:** `test/e2e/mock-openai.mjs` sends `endpoints` only for `include=endpoints` (comma lists accepted). Otherwise it sends a route-level `trustedrouter` object.
+- **Unit tests:** 92 pass (27 host, 65 client). The new client tests cover:
+  - the URL;
+  - a model without an endpoint list reading as unknown;
+  - `empty-endpoints` still meaning no provider;
+  - one test that spawns the mock and loads it through `catalogURL` and `createCatalogs`.
+  
+  Mutation-checked: reverting the URL fails 2 tests, and restoring v0.1.0's missing-list-as-`[]` fails 3.
+- **Live reply, through the new `indexCatalog`:** all 669 models are indexed. `z-ai/glm-5.3` has 50 endpoints: any 34, no_store 13, zdr 11, confidential 2 (Tinfoil, Privatemode). `deepseek/deepseek-v4.1-flash` gets Tinfoil only at confidential, and `anthropic/claude-haiku-4.5` gets nothing above any. The plain reply indexes 0 models.
+- **CI** (`.github/workflows/test.yml`):
+  - Node 24 in both jobs.
+  - The push/PR matrix is 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1 and 0.2.2-alpha.3.
+  - The weekly/manual matrix is `latest`, `alpha` and `next`.
+  - Not yet run on GitHub (nothing pushed); actionlint isn't installed on agent-server, but the YAML parses.
+- **e2e:** `run-all.sh` plus `clean-install.sh` (packed 0.1.1) passed on Node 24 on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1, 0.2.2-alpha.3 and `next` (0.2.2-rc.3). There was no build prompt and no `EBADENGINE`; the only warning was the expected peer warning.
+- **Browser check:** Claude in Chrome on agent-server, against a scratch `dsh web` 0.2.2-rc.1 (`DSH_VERSION=0.2.2-rc.1 test/ui/scratch-web.sh start`).
+  - The section renders on both gateway cards, and the page fetched `…/models?include=endpoints` from both.
+  - `z-ai/glm-5.3`'s floors name providers again ("Confidential + E2EE + ZDR — Tinfoil, Privatemode"), with "34 providers qualify", and the datalists are filled. The mock card offers Tinfoil/Nebius/DeepInfra.
+  - Applying Confidential wrote `models["z-ai/glm-5.3"]` to the scratch patch. The host logged the new policy live, and the `:nitro` row showed "Uses z-ai/glm-5.3". So saves work on 0.2.2 too.
+  - Reload: no console messages.
+  - Not re-checked in a browser on 0.2.0-rc.2/0.2.1-alpha.1; the client change doesn't touch any dsh API, and their e2e and clean installs passed.
+- **Release prep:**
+  - `package.json` is at 0.1.1, and the CHANGELOG has a dated 0.1.1 entry (re-date it if the release slips).
+  - README: install specs `#v0.1.1`, Requirements and "Tested with" (four versions, Node 24, with dsh 0.2.2 needing Node ≥ 24.9), the model-list URL, and the `DSH_VERSION` example.
+  - Committed locally, **not pushed or tagged**.
+- **Left (ask first):**
+  1. Push `main` and watch CI.
+  2. Tag `v0.1.1` and create the GitHub release from the CHANGELOG entry.
+  3. Run `clean-install.sh github:AmmarByFar/dsh-trustedrouter#v0.1.1` (on rc.2 and 0.2.2-rc.1), with git credentials hidden as in Phase 4.
+  4. Optionally `gh workflow run test.yml` to try the new dist-tag matrix.
+
+### Phase 5: migrate the maintainer's machine. After Phase 4.5 (ask first: it edits the live profile).
+
+- Install `v0.1.1` (or later) rather than `v0.1.0`, which has the endpoints break above.
+- The live dsh setup described in `CLAUDE.local.md` is on the maintainer's laptop (`ammar-OP-LP2`). If work continues on another machine, confirm with the maintainer which machine runs the live dsh before starting.
 
 - Install the release into the real `web` profile and move settings into the new `trustedrouter` row.
 - Remove the prototype's `extra-body` insert row and `~/dsh-extra-body` only after verifying (see `CLAUDE.local.md`).
@@ -414,7 +499,7 @@ Steps:
 ### Install flow for users (as in the README)
 
 1. Run `corepack enable pnpm` once if `pnpm` isn't on PATH.
-2. dsh sidebar → **Plugins** → **Add plugin** → `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.0` → Install, or the CLI: `dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.0`.
+2. dsh sidebar → **Plugins** → **Add plugin** → `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.1` → Install, or the CLI: `dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.1`.
 3. **Enable now**. (Verified in Phase 3 with `#main`.)
 4. Settings → Models → TrustedRouter card → **Privacy & routing**.
 
@@ -422,7 +507,7 @@ Steps:
 
 - **Unit:** `npm test`.
   - Host (`test/trustedrouter.test.js`): merge, model lookup, URL matching, fail-closed, live updates, logging and config validation.
-  - Client (`test/client.test.js`): evaluates `client.js` with a stub module loader and React, then tests its exported helpers.
+  - Client (`test/client.test.js`): evaluates `client.js` with a stub module loader and React, then tests its exported helpers. One test spawns `test/e2e/mock-openai.mjs` and loads its model list through `catalogURL`.
 - **Host end-to-end:** `test/e2e/run-headless.sh <row.yml>`, i.e. `dsh --profile headless` in a scratch `DSH_HOME` against `test/e2e/mock-openai.mjs`. It asserts the recorded request bodies against the row's `# expect-provider:` line.
   - `test/e2e/run-all.sh` runs every row in `test/e2e/rows/` plus the control run without the plugin (which expects no `provider`).
   - `dsh headless` prints the plugin's stderr lines, which is useful for asserting logging.

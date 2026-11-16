@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 (2026-11-15)
+
+- Fixes the Models page with TrustedRouter's current API. TrustedRouter's model list now leaves out each model's providers unless asked for them. With 0.1.0 that disabled every privacy floor above Any and warned that every model's requests would be refused. The section now fetches `<base URL>/models?include=endpoints`. Requests weren't affected: the saved policy was still sent.
+- A model the list gives no provider details for now offers every privacy level, with a note, instead of none.
+- Tested on dsh 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1 and 0.2.2-alpha.3, with Node 24. dsh 0.2.2 needs Node 24.9 or newer.
+
 ## 0.1.0 (2026-10-07)
 
 First release.

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { spawn } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, it } from 'node:test'
+import { setTimeout as sleep } from 'node:timers/promises'
 import vm from 'node:vm'
 import { Config, mergeBody as hostMerge, providerFor as hostProviderFor } from '../index.js'
 
@@ -51,7 +55,10 @@ const catalog = client.indexCatalog({
         ],
       },
     },
-    { id: 'no-endpoints' },
+    // TrustedRouter's reply without `?include=endpoints`: route-level fields only.
+    { id: 'no-endpoints', trustedrouter: { provider: 'tinfoil', privacy_tier: 3 } },
+    { id: 'no-info' },
+    { id: 'empty-endpoints', trustedrouter: { endpoints: [] } },
     { name: 'no id' },
     'garbage',
   ],
@@ -121,12 +128,23 @@ describe('routeCovered', () => {
 })
 
 describe('catalog', () => {
-  it('indexes only models with an id and tolerates missing fields', () => {
-    assert.deepEqual([...catalog.keys()], ['z-ai/glm-5.3', 'no-endpoints'])
-    assert.deepEqual(plain(catalog.get('no-endpoints')), { endpoints: [] })
+  it('indexes only models with an id and an endpoint list, and tolerates missing fields', () => {
+    assert.deepEqual([...catalog.keys()], ['z-ai/glm-5.3', 'empty-endpoints'])
+    assert.deepEqual(plain(catalog.get('empty-endpoints')), { endpoints: [] })
     assert.equal(client.indexCatalog(null).size, 0)
     const [first] = client.indexCatalog({ data: [{ id: 'm', trustedrouter: { endpoints: [{ provider: 'p' }] } }] }).get('m').endpoints
     assert.equal(first.tier, 0)
+  })
+  it('treats a model without an endpoint list as unknown, not as served by no provider', () => {
+    const entry = client.catalogEntry(catalog, 'no-endpoints')
+    assert.equal(entry, undefined)
+    assert.ok(plain(client.levelChoices(entry, {})).every(choice => choice.providers === undefined))
+    assert.equal(client.qualifyingProviders(entry, { min_privacy: 'confidential' }), undefined)
+    assert.deepEqual(plain(client.qualifyingProviders(catalog.get('empty-endpoints'), {})), [])
+  })
+  it('asks for the model list with endpoints', () => {
+    assert.equal(client.catalogURL('https://api.trustedrouter.com/v1'), 'https://api.trustedrouter.com/v1/models?include=endpoints')
+    assert.equal(client.catalogURL('https://api.trustedrouter.com/v1//'), 'https://api.trustedrouter.com/v1/models?include=endpoints')
   })
   it('falls back to the base model for a suffixed id', () => {
     assert.equal(client.catalogEntry(catalog, 'z-ai/glm-5.3:nitro'), catalog.get('z-ai/glm-5.3'))
@@ -294,7 +312,7 @@ describe('createCatalogs', () => {
     const fetched = []
     const catalogs = client.createCatalogs(async (url) => {
       fetched.push(url)
-      return { ok: true, json: async () => ({ data: [{ id: 'm' }] }) }
+      return { ok: true, json: async () => ({ data: [{ id: 'm', trustedrouter: { endpoints: [] } }] }) }
     })
     let published = 0
     catalogs.subscribe(() => { published += 1 })
@@ -315,6 +333,36 @@ describe('createCatalogs', () => {
     catalogs.dispose()
     catalogs.load('https://b.example/v1/models')
     assert.equal(catalogs.get('https://b.example/v1/models'), undefined)
+  })
+  it('gets endpoints from the e2e mock, which like TrustedRouter sends them only when asked', async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'dshtr-mock-'))
+    const mock = spawn(process.execPath, [new URL('./e2e/mock-openai.mjs', import.meta.url).pathname, join(dir, 'log.jsonl'), join(dir, 'port')], { stdio: 'ignore' })
+    t.after(() => {
+      mock.kill()
+      rmSync(dir, { recursive: true, force: true })
+    })
+    let port
+    for (let attempt = 0; port === undefined && attempt < 100; attempt += 1) {
+      try {
+        port = readFileSync(join(dir, 'port'), 'utf8') || undefined
+      } catch {}
+      if (port === undefined) await sleep(50)
+    }
+    assert.ok(port, 'the mock wrote its port')
+    const base = `http://127.0.0.1:${port}/v1`
+    const load = async (url) => {
+      const catalogs = client.createCatalogs(globalThis.fetch)
+      catalogs.load(url)
+      for (let attempt = 0; catalogs.get(url).status === 'loading' && attempt < 100; attempt += 1) await sleep(20)
+      return catalogs.get(url)
+    }
+    const withEndpoints = await load(client.catalogURL(base))
+    assert.equal(withEndpoints.status, 'ready')
+    assert.deepEqual(plain(withEndpoints.models.get('mock-model').endpoints.map(e => e.provider)), ['tinfoil', 'nebius', 'deepinfra', 'novita'])
+    // The plain list reads as unknown models, as the live API's does.
+    const without = await load(`${base}/models`)
+    assert.equal(without.status, 'ready')
+    assert.equal(without.models.size, 0)
   })
 })
 

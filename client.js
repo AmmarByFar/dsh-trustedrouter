@@ -11,7 +11,8 @@
  *   fields, the raw per-model and rule JSON, and the log switch.
  *
  * The privacy-floor choices come from TrustedRouter's public model list
- * (`GET <gateway>/models`: no key, CORS-open), fetched once per gateway per page.
+ * (`GET <gateway>/models?include=endpoints`: no key, CORS-open), fetched once
+ * per gateway per page.
  * The list is only advice: the host half sends whatever is saved, and
  * TrustedRouter refuses (400) a floor that no provider meets.
  *
@@ -119,14 +120,18 @@ window.__ModuleLoader__.load({
      * Index TrustedRouter's `/models` reply by model id, keeping only what
      * the privacy choices need. The reply is unversioned, so every field is
      * optional and an endpoint without a tier counts as Standard.
+     *
+     * A model without an endpoint list is left out, so it reads as unknown
+     * (every level offered) rather than as served by no provider (every level
+     * disabled). The list is opt-in (`?include=endpoints`) since 2026-11.
      */
     function indexCatalog(json) {
       const index = new Map()
       const data = isPlainObject(json) && Array.isArray(json.data) ? json.data : []
       for (const model of data) {
         if (!isPlainObject(model) || typeof model.id !== 'string') continue
-        const info = isPlainObject(model.trustedrouter) ? model.trustedrouter : {}
-        const endpoints = (Array.isArray(info.endpoints) ? info.endpoints : []).filter(isPlainObject).map(endpoint => ({
+        if (!isPlainObject(model.trustedrouter) || !Array.isArray(model.trustedrouter.endpoints)) continue
+        const endpoints = model.trustedrouter.endpoints.filter(isPlainObject).map(endpoint => ({
           provider: typeof endpoint.provider === 'string' ? endpoint.provider : '',
           name: typeof endpoint.provider_name === 'string' ? endpoint.provider_name : endpoint.provider,
           tier: Number.isInteger(endpoint.privacy_tier) ? endpoint.privacy_tier : 0,
@@ -317,8 +322,9 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /** The model list with each model's provider endpoints, which TrustedRouter leaves out unless asked. */
     function catalogURL(baseURL) {
-      return `${baseURL.replace(/\/+$/, '')}/models`
+      return `${baseURL.replace(/\/+$/, '')}/models?include=endpoints`
     }
 
     // ---------------------------------------------------------------- hooks
@@ -1054,7 +1060,7 @@ window.__ModuleLoader__.load({
       'section.readOnly': 'Settings are read-only here; change them from a browser on this machine.',
       'catalog.loading': 'Loading TrustedRouter\'s model list…',
       'catalog.failed': 'Couldn\'t load TrustedRouter\'s model list ({error}), so every privacy level is offered.',
-      'catalog.unknownModel': 'TrustedRouter\'s model list doesn\'t include this model, so every privacy level is offered.',
+      'catalog.unknownModel': 'TrustedRouter\'s model list gives no provider details for this model, so every privacy level is offered.',
       'model.override': 'Custom',
       'model.inherits': 'Uses {model}',
       'model.defaults': 'Defaults',
@@ -1149,7 +1155,7 @@ window.__ModuleLoader__.load({
       apply,
       // Pure helpers, exported like the host half's for the unit tests.
       EN, LEVELS, mergeBody, providerFor, overrideKey, routeCovered, slugList, levelOf, indexCatalog,
-      catalogEntry, levelChoices, qualifyingProviders, modelOps, pageOps, providerProblem, routeModels, valueAt, createCatalogs,
+      catalogEntry, levelChoices, qualifyingProviders, modelOps, pageOps, providerProblem, routeModels, valueAt, createCatalogs, catalogURL,
     }
   },
 })

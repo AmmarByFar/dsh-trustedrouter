@@ -12,7 +12,7 @@ TrustedRouter reads routing and privacy policy only from the request body, for e
 
 ## Requirements
 
-- **dsh web**, tested on 0.2.0-rc.2 and 0.2.1-alpha.1 (see [Tested with](#tested-with)). The desktop app isn't supported.
+- **dsh web**, tested on 0.2.0-rc.2, 0.2.1-alpha.1, 0.2.2-rc.1 and 0.2.2-alpha.3 (see [Tested with](#tested-with)). The desktop app isn't supported.
 - **pnpm on your PATH.** dsh installs plugins with it, and fails with "pnpm was not found" otherwise. If you don't have it, run `corepack enable pnpm` or `npm install -g pnpm`.
 - **A TrustedRouter provider in dsh.** Settings → Models → **Add model provider** → **Custom model API**:
   - base URL `https://api.trustedrouter.com/v1`;
@@ -25,13 +25,13 @@ TrustedRouter reads routing and privacy policy only from the request body, for e
 **From the dsh web UI:**
 
 1. Sidebar → **Plugins** → **Add plugin**.
-2. Enter `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.0` and choose **Install**.
+2. Enter `https://github.com/AmmarByFar/dsh-trustedrouter#v0.1.1` and choose **Install**.
 3. Choose **Enable now**. No reload or restart is needed.
 
 **From the command line**, for the `web` profile that `dsh web` uses:
 
 ```sh
-dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.0
+dsh plugin --profile web add github:AmmarByFar/dsh-trustedrouter#v0.1.1
 ```
 
 Then restart `dsh web` if it was running.
@@ -73,7 +73,7 @@ As you change settings, the editor counts the providers that still qualify. It w
 A few things to know:
 - The section appears only on saved providers whose base URL is under a configured gateway. By default that's `https://api.trustedrouter.com/v1`.
 - You can only change settings from a browser on the same machine as dsh. That's a dsh rule for all settings.
-- To list providers per model, your browser fetches TrustedRouter's public model list (`<base URL>/models`, no API key sent) the first time you open the section. If that fails, every privacy level is offered.
+- To list providers per model, your browser fetches TrustedRouter's public model list (`<base URL>/models?include=endpoints`, no API key sent) the first time you open the section. If that fails, every privacy level is offered.
 
 ### Defaults and advanced settings: the Plugins page
 
@@ -134,17 +134,19 @@ Repeat step 2 after every dsh upgrade (see [Limitations](#how-it-works-and-limit
 
 | dsh | Node |
 |---|---|
-| 0.2.0-rc.2 (npm `latest`) | 22 |
-| 0.2.1-alpha.1 (npm `alpha`) | 22 |
+| 0.2.0-rc.2 | 24 (and 22) |
+| 0.2.1-alpha.1 | 24 (and 22) |
+| 0.2.2-rc.1 (npm `latest`) | 24 |
+| 0.2.2-alpha.3 (npm `alpha`) | 24 |
 
-dsh is pre-release, so newer versions may move the settings pages this plugin hooks into.
+dsh 0.2.2 and later need Node 24.9 or newer. dsh is pre-release, so newer versions may move the settings pages this plugin hooks into.
 
 ## Development
 
 ```sh
 npm install                    # the schemastery devDependency, for tests
 npm test                       # unit tests, host and client
-test/e2e/run-all.sh            # headless dsh against a mock gateway; DSH_VERSION=0.2.0-rc.2|alpha|latest
+test/e2e/run-all.sh            # headless dsh against a mock gateway; DSH_VERSION=0.2.2-rc.1|alpha|latest|next
 test/e2e/clean-install.sh      # install the packed plugin into a fresh dsh home and check both halves
 test/ui/scratch-web.sh start <dir>   # a scratch dsh web with this checkout linked in, for the browser
 ```
